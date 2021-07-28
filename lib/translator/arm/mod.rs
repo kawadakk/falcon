@@ -1,11 +1,11 @@
 //! Capstone-based translator for MIPS.
 
-use architecture::Endian;
-use error::*;
+use crate::architecture::Endian;
+use crate::error::*;
+use crate::il::*;
+use crate::translator::{BlockTranslationResult, Translator};
 use falcon_capstone::capstone;
 use falcon_capstone::capstone_sys::arm_cc;
-use il::*;
-use translator::{BlockTranslationResult, Translator};
 
 pub mod semantics;
 #[cfg(test)]

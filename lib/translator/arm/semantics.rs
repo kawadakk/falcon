@@ -1,8 +1,8 @@
-use error::*;
+use crate::error::*;
+use crate::il::Expression as Expr;
+use crate::il::*;
 use falcon_capstone::capstone;
 use falcon_capstone::capstone_sys::{arm_op_mem, arm_op_type, arm_reg, arm_shifter, cs_arm_op};
-use il::Expression as Expr;
-use il::*;
 
 /// Struct for dealing with x86 registers
 pub struct ARMRegister {
