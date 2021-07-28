@@ -2,7 +2,7 @@ use crate::error::*;
 use crate::il::Expression as Expr;
 use crate::il::*;
 use falcon_capstone::capstone;
-use falcon_capstone::capstone_sys::{arm_op_mem, arm_op_type, arm_reg, arm_shifter, cs_arm_op};
+use falcon_capstone::capstone_sys::{arm_op_type, arm_reg, arm_shifter, cs_arm_op};
 
 /// Struct for dealing with x86 registers
 pub struct ARMRegister {
@@ -179,7 +179,7 @@ impl<'a> RegisterMaker<'a> {
         // Calculate the index
         // Index is a register
         let index: Option<Expression> = if mem.index != arm_reg::ARM_REG_INVALID {
-            let mut index = self.reg_expression(mem.index)?;
+            let index = self.reg_expression(mem.index)?;
             // Apply shift
             let index = self.apply_shift(index, operand.shift.type_, operand.shift.value)?;
             Some(index)
