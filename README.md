@@ -13,10 +13,15 @@ Falcon is a formal binary analysis framework in Rust.
 * Fixed-point engine for data-flow analysis and abstract interpretation.
 * Performant memory models for analysis.
 * A concrete executor over Falcon IL.
-* [Gluon](https://github.com/gluon-lang/gluon) scripting bindings provided with [Osprey](https://github.com/falconre/osprey).
+
+# Building
+
+* Several scripts to get you up-and-running with Falcon can be found in the `scripts/` directory.
+* Dependencies are capstone and clang.
+* Falcon works out of the box with capstone4.
 
 # Questions / Support
 
-* I write about Falcon on my [blog](http://reversing.io/). [Just posts about Falcon](http://reversing.io/tags/falcon/).
-* I am idling in irc.freenode.net#rust-falcon.
+* We have a [Gitter](https://gitter.im/rust-falcon/Lobby). This is the most reliable way to contact us.
 * You can also find me in the Binary Ninja slack under the name "endeavor".
+* There is an infrequently checked IRC channel at irc.freenode.net#rust-falcon.

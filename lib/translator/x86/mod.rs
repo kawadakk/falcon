@@ -1,7 +1,7 @@
 //! Capstone-based translator for 32/64-bit x86.
 
-use error::*;
-use translator::{BlockTranslationResult, Translator};
+use crate::error::*;
+use crate::translator::{BlockTranslationResult, Options, Translator};
 
 mod mode;
 mod semantics;
@@ -14,7 +14,7 @@ mod test;
 use self::mode::Mode;
 
 /// The X86 translator.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct X86;
 
 impl X86 {
@@ -24,13 +24,18 @@ impl X86 {
 }
 
 impl Translator for X86 {
-    fn translate_block(&self, bytes: &[u8], address: u64) -> Result<BlockTranslationResult> {
-        translator::translate_block(Mode::X86, bytes, address)
+    fn translate_block(
+        &self,
+        bytes: &[u8],
+        address: u64,
+        options: &Options,
+    ) -> Result<BlockTranslationResult> {
+        translator::translate_block(Mode::X86, bytes, address, options)
     }
 }
 
 /// The Amd64 translator.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Amd64;
 
 impl Amd64 {
@@ -40,7 +45,12 @@ impl Amd64 {
 }
 
 impl Translator for Amd64 {
-    fn translate_block(&self, bytes: &[u8], address: u64) -> Result<BlockTranslationResult> {
-        translator::translate_block(Mode::Amd64, bytes, address)
+    fn translate_block(
+        &self,
+        bytes: &[u8],
+        address: u64,
+        options: &Options,
+    ) -> Result<BlockTranslationResult> {
+        translator::translate_block(Mode::Amd64, bytes, address, options)
     }
 }

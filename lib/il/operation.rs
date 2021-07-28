@@ -1,6 +1,6 @@
 //! An `Operation` captures the semantics of the IL.
 
-use il::*;
+use crate::il::*;
 use std::fmt;
 
 /// An IL Operation updates some state.
@@ -16,90 +16,76 @@ pub enum Operation {
     Branch { target: Expression },
     /// Holds an Intrinsic for unmodellable instructions
     Intrinsic { intrinsic: Intrinsic },
-    /// An operation that does nothing, and allows for a placeholder
-    /// `Instuction`
-    Nop,
+    /// An operation that does nothing, and allows for a placeholder `Instruction`
+    Nop { placeholder: Option<Box<Operation>> },
+}
+
+impl Default for Operation {
+    fn default() -> Self {
+        Self::Nop { placeholder: None }
+    }
 }
 
 impl Operation {
     /// Create a new `Operation::Assign`.
     pub fn assign(dst: Scalar, src: Expression) -> Operation {
-        Operation::Assign { dst: dst, src: src }
+        Operation::Assign { dst, src }
     }
 
     /// Create a new `Operation::Store`.
     pub fn store(index: Expression, src: Expression) -> Operation {
-        Operation::Store {
-            index: index,
-            src: src,
-        }
+        Operation::Store { index, src }
     }
 
     /// Create a new `Operation::Load`.
     pub fn load(dst: Scalar, index: Expression) -> Operation {
-        Operation::Load {
-            dst: dst,
-            index: index,
-        }
+        Operation::Load { dst, index }
     }
 
     /// Create a new `Operation::Brc`.
     pub fn branch(target: Expression) -> Operation {
-        Operation::Branch { target: target }
+        Operation::Branch { target }
     }
 
     /// Create a new `Operation::Intrinsic`.
     pub fn intrinsic(intrinsic: Intrinsic) -> Operation {
-        Operation::Intrinsic {
-            intrinsic: intrinsic,
-        }
+        Operation::Intrinsic { intrinsic }
     }
 
     /// Create a new `Operation::Nop`
     pub fn nop() -> Operation {
-        Operation::Nop
+        Operation::Nop { placeholder: None }
+    }
+
+    /// Create a new `Operation::Nop` as placeholder for the given `Operation`
+    pub fn placeholder(operation: Operation) -> Operation {
+        Operation::Nop {
+            placeholder: Some(Box::new(operation)),
+        }
     }
 
     pub fn is_assign(&self) -> bool {
-        match self {
-            Operation::Assign { .. } => true,
-            _ => false,
-        }
+        matches!(self, Operation::Assign { .. })
     }
 
     pub fn is_store(&self) -> bool {
-        match self {
-            Operation::Store { .. } => true,
-            _ => false,
-        }
+        matches!(self, Operation::Store { .. })
     }
 
     pub fn is_load(&self) -> bool {
-        match self {
-            Operation::Load { .. } => true,
-            _ => false,
-        }
+        matches!(self, Operation::Load { .. })
     }
 
     pub fn is_branch(&self) -> bool {
-        match self {
-            Operation::Branch { .. } => true,
-            _ => false,
-        }
+        matches!(self, Operation::Branch { .. })
     }
 
     pub fn is_intrinsic(&self) -> bool {
-        match self {
-            Operation::Intrinsic { .. } => true,
-            _ => false,
-        }
+        matches!(self, Operation::Intrinsic { .. })
     }
 
     pub fn is_nop(&self) -> bool {
-        match self {
-            Operation::Nop => true,
-            _ => false,
-        }
+        matches!(self, Operation::Nop { .. })
     }
 
     /// Get each `Scalar` read by this `Operation`.
@@ -116,7 +102,7 @@ impl Operation {
             Operation::Load { ref index, .. } => Some(index.scalars()),
             Operation::Branch { ref target } => Some(target.scalars()),
             Operation::Intrinsic { ref intrinsic } => intrinsic.scalars_read(),
-            Operation::Nop => Some(Vec::new()),
+            Operation::Nop { .. } => Some(Vec::new()),
         }
     }
 
@@ -137,7 +123,7 @@ impl Operation {
             Operation::Load { ref mut index, .. } => Some(index.scalars_mut()),
             Operation::Branch { ref mut target } => Some(target.scalars_mut()),
             Operation::Intrinsic { ref mut intrinsic } => intrinsic.scalars_read_mut(),
-            Operation::Nop => Some(Vec::new()),
+            Operation::Nop { .. } => Some(Vec::new()),
         }
     }
 
@@ -147,7 +133,7 @@ impl Operation {
             Operation::Assign { ref dst, .. } | Operation::Load { ref dst, .. } => Some(vec![dst]),
             Operation::Store { .. } | Operation::Branch { .. } => Some(Vec::new()),
             Operation::Intrinsic { ref intrinsic } => intrinsic.scalars_written(),
-            Operation::Nop => Some(Vec::new()),
+            Operation::Nop { .. } => Some(Vec::new()),
         }
     }
 
@@ -160,7 +146,7 @@ impl Operation {
             }
             Operation::Store { .. } | Operation::Branch { .. } => Some(Vec::new()),
             Operation::Intrinsic { ref mut intrinsic } => intrinsic.scalars_written_mut(),
-            Operation::Nop => Some(Vec::new()),
+            Operation::Nop { .. } => Some(Vec::new()),
         }
     }
 }
@@ -173,7 +159,7 @@ impl fmt::Display for Operation {
             Operation::Load { ref dst, ref index } => write!(f, "{} = [{}]", dst, index),
             Operation::Branch { ref target } => write!(f, "branch {}", target),
             Operation::Intrinsic { ref intrinsic } => write!(f, "intrinsic {}", intrinsic),
-            Operation::Nop => write!(f, "nop"),
+            Operation::Nop { .. } => write!(f, "nop"),
         }
     }
 }

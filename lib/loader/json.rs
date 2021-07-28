@@ -1,11 +1,9 @@
 //! Experimental loader which takes a program specification in Json form.
 
-use architecture::*;
-use base64;
-use loader::*;
-use memory::backing::*;
-use memory::MemoryPermissions;
-use serde_json;
+use crate::architecture::*;
+use crate::loader::*;
+use crate::memory::backing::*;
+use crate::memory::MemoryPermissions;
 use serde_json::Value;
 use std::fs::File;
 use std::io::Read;
@@ -92,10 +90,10 @@ impl Json {
         }
 
         Ok(Json {
-            function_entries: function_entries,
-            memory: memory,
-            architecture: architecture,
-            entry: entry,
+            function_entries,
+            memory,
+            architecture,
+            entry,
         })
     }
 }

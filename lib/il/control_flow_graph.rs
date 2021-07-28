@@ -1,6 +1,7 @@
 //! A `ControlFlowGraph` is a directed `Graph` of `Block` and `Edge`.
 
-use il::*;
+use crate::graph;
+use crate::il::*;
 use std::collections::BTreeMap;
 use std::fmt;
 
@@ -14,7 +15,7 @@ use std::fmt;
 /// an instruction as its own `ControlFlowGraph`. `rep scasb` is a great example of when this
 /// pattern is helpful. Instructions in a `Block` will have one entry, and one exit. Explicitly
 /// declaring these makes merging `ControlFlowGraph`s easier.
-#[derive(Clone, Debug, Deserialize, Hash, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Hash, Eq, PartialEq, Serialize, Default)]
 pub struct ControlFlowGraph {
     // The internal graph used to store our blocks.
     graph: graph::Graph<Block, Edge>,
@@ -116,13 +117,23 @@ impl ControlFlowGraph {
     }
 
     /// Get every incoming edge to a block
-    pub fn edges_in(&self, index: usize) -> Result<&Vec<Edge>> {
+    pub fn edges_in(&self, index: usize) -> Result<Vec<&Edge>> {
         self.graph.edges_in(index)
     }
 
     /// Get every outgoing edge from a block
-    pub fn edges_out(&self, index: usize) -> Result<&Vec<Edge>> {
+    pub fn edges_out(&self, index: usize) -> Result<Vec<&Edge>> {
         self.graph.edges_out(index)
+    }
+
+    /// Get the indices of every predecessor of a `Block` in this `ControlFlowGraph`.
+    pub fn predecessor_indices(&self, index: usize) -> Result<Vec<usize>> {
+        self.graph.predecessor_indices(index)
+    }
+
+    /// Get the indices of every successor of a `Block` in this `ControlFlowGraph`.
+    pub fn successor_indices(&self, index: usize) -> Result<Vec<usize>> {
+        self.graph.successor_indices(index)
     }
 
     /// Sets the address for all instructions in this `ControlFlowGraph`.
@@ -214,6 +225,15 @@ impl ControlFlowGraph {
                     None => bail!("successor not found"),
                 };
 
+                // If this is the entry vertex, we will not merge
+                if self
+                    .entry()
+                    .map(|entry| entry == successor)
+                    .unwrap_or(false)
+                {
+                    continue;
+                }
+
                 // If this successor is already being merged, skip it
                 if blocks_being_merged.contains(&successor) {
                     continue;
@@ -248,7 +268,7 @@ impl ControlFlowGraph {
                 for edge in self.graph.edges_out(successor_index).unwrap() {
                     let head = merge_index;
                     let tail = edge.tail();
-                    let condition = edge.condition().clone();
+                    let condition = edge.condition();
                     let edge = Edge::new(head, tail, condition.cloned());
                     new_edges.push(edge);
                 }
@@ -269,10 +289,7 @@ impl ControlFlowGraph {
     /// set, which should be the case for all conformant translators. You can
     /// also append to an empty ControlFlowGraph.
     pub fn append(&mut self, other: &ControlFlowGraph) -> Result<()> {
-        let is_empty = match self.graph.num_vertices() {
-            0 => true,
-            _ => false,
-        };
+        let is_empty = self.graph.num_vertices() == 0;
 
         if !is_empty && (self.entry().is_none() || self.exit().is_none()) {
             return Err("entry/exit not set for dest ControlFlowGraph::append".into());
@@ -335,7 +352,7 @@ impl ControlFlowGraph {
             bail!("entry/exit not set on control flow graph");
         }
 
-        // our entry and exit our no longer valid
+        // our entry and exit are no longer valid
         self.entry = None;
         self.exit = None;
 
@@ -379,16 +396,10 @@ impl ControlFlowGraph {
 impl fmt::Display for ControlFlowGraph {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for block in self.blocks() {
-            match writeln!(f, "{}", block) {
-                Err(e) => return Err(e),
-                Ok(_) => {}
-            }
+            writeln!(f, "{}", block)?;
         }
         for edge in self.edges() {
-            match writeln!(f, "edge {}", edge) {
-                Err(e) => return Err(e),
-                Ok(_) => {}
-            }
+            writeln!(f, "edge {}", edge)?;
         }
         Ok(())
     }

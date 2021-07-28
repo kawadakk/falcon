@@ -7,29 +7,29 @@
 //!
 //! To create a `Block`, call `ControlFlowGraph::new_block`.
 
-use il::*;
+use crate::il::*;
 use std::fmt;
 
 /// A basic block in Falcon IL.
-#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, Default)]
 pub struct Block {
     /// The index of the block.
     index: usize,
     /// an internal counter for the next block-unique instruction.
     next_instruction_index: usize,
-    /// An internal counter for the next block-unique temporary variable.
-    next_temp_index: usize,
     /// The instructions for this block.
     instructions: Vec<Instruction>,
+    /// The phi nodes for this block.
+    phi_nodes: Vec<PhiNode>,
 }
 
 impl Block {
     pub(crate) fn new(index: usize) -> Block {
         Block {
-            index: index,
+            index,
             next_instruction_index: 0,
-            next_temp_index: 0,
             instructions: Vec::new(),
+            phi_nodes: Vec::new(),
         }
     }
 
@@ -54,7 +54,7 @@ impl Block {
     ///
     /// Instruction indices are updated accordingly.
     pub fn append(&mut self, other: &Block) {
-        other.instructions().into_iter().for_each(|instruction| {
+        other.instructions().iter().for_each(|instruction| {
             let index = self.new_instruction_index();
             self.instructions.push(instruction.clone_new_index(index));
         })
@@ -104,7 +104,33 @@ impl Block {
             .map(|index| {
                 self.instructions.remove(index);
             })
-            .ok_or(format!("No instruction with index {} found", index).into())
+            .ok_or_else(|| format!("No instruction with index {} found", index).into())
+    }
+
+    /// Returns phi nodes of this `Block`
+    pub fn phi_nodes(&self) -> &Vec<PhiNode> {
+        &self.phi_nodes
+    }
+
+    /// Returns a mutable reference to the phi nodes of this `Block`.
+    pub fn phi_nodes_mut(&mut self) -> &mut Vec<PhiNode> {
+        &mut self.phi_nodes
+    }
+
+    /// Returns a `PhiNode` by index, or `None` if the `PhiNode` does not exist.
+    pub fn phi_node(&self, index: usize) -> Option<&PhiNode> {
+        self.phi_nodes.get(index)
+    }
+
+    /// Returns a mutable reference to a `PhiNode` by index, or `None` if
+    /// the `PhiNode` does not exist.
+    pub fn phi_node_mut(&mut self, index: usize) -> Option<&mut PhiNode> {
+        self.phi_nodes.get_mut(index)
+    }
+
+    /// Adds the phi node to this `Block`.
+    pub fn add_phi_node(&mut self, phi_node: PhiNode) {
+        self.phi_nodes.push(phi_node);
     }
 
     /// Clone this block and set a new index.
@@ -112,13 +138,6 @@ impl Block {
         let mut clone = self.clone();
         clone.index = index;
         clone
-    }
-
-    /// Generates a temporary scalar unique to this block.
-    pub fn temp(&mut self, bits: usize) -> Scalar {
-        let next_index = self.next_temp_index;
-        self.next_temp_index = next_index + 1;
-        Scalar::new(format!("temp_{}.{}", self.index, next_index), bits)
     }
 
     /// Adds an assign operation to the end of this block.
@@ -139,7 +158,7 @@ impl Block {
         self.push(Instruction::load(index, dst, address));
     }
 
-    /// Adds a conditional branch operation to the end of this block.
+    /// Adds an unconditional branch operation to the end of this block.
     pub fn branch(&mut self, dst: Expression) {
         let index = self.new_instruction_index();
         self.push(Instruction::branch(index, dst));
@@ -156,6 +175,16 @@ impl Block {
         let index = self.new_instruction_index();
         self.push(Instruction::nop(index));
     }
+
+    /// Create a new `Nop` instruction as placeholder for the given `Operation`.
+    ///
+    /// # Warning
+    /// You almost never want to call this function. You should use the
+    /// `nop_placeholder` method on `il::Block` instead.
+    pub fn placeholder(&mut self, operation: Operation) {
+        let index = self.new_instruction_index();
+        self.push(Instruction::placeholder(index, operation));
+    }
 }
 
 impl graph::Vertex for Block {
@@ -170,6 +199,9 @@ impl graph::Vertex for Block {
 impl fmt::Display for Block {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "[ Block: 0x{:X} ]", self.index)?;
+        for phi_node in self.phi_nodes() {
+            writeln!(f, "{}", phi_node)?;
+        }
         for instruction in self.instructions() {
             writeln!(f, "{}", instruction)?;
         }

@@ -1,9 +1,9 @@
 //! Information and types for Falcon's supported architectures.
 
-use analysis::calling_convention::{CallingConvention, CallingConventionType};
-use il;
+use crate::analysis::calling_convention::{CallingConvention, CallingConventionType};
+use crate::il;
+use crate::translator;
 use std::fmt::Debug;
-use translator;
 
 /// An architecture's endanness.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -32,7 +32,7 @@ pub trait Architecture: Debug + Send + Sync {
 }
 
 /// The 64-bit X86 Architecture.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct Amd64 {}
 
 impl Amd64 {
@@ -134,7 +134,7 @@ impl Architecture for Armel {
 }
 
 /// The 32-bit Mips Architecture.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct Mips {}
 
 impl Mips {
@@ -168,7 +168,7 @@ impl Architecture for Mips {
 }
 
 /// The 32-bit Mipsel Architecture.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct Mipsel {}
 
 impl Mipsel {
@@ -202,7 +202,7 @@ impl Architecture for Mipsel {
 }
 
 /// The 32-bit Mips Architecture.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct Ppc {}
 
 impl Ppc {
@@ -236,7 +236,7 @@ impl Architecture for Ppc {
 }
 
 /// The 32-bit X86 Architecture.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct X86 {}
 
 impl X86 {

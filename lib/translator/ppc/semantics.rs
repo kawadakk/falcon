@@ -1,11 +1,12 @@
-use error::*;
+use crate::error::*;
+use crate::il::Expression as Expr;
+use crate::il::*;
 use falcon_capstone::capstone;
 use falcon_capstone::capstone_sys::ppc_reg;
-use il::Expression as Expr;
-use il::*;
+use std::cmp::Ordering;
 
 /// Struct for dealing with x86 registers
-pub struct PPCRegister {
+pub struct PpcRegister {
     name: &'static str,
     // The capstone enum value for this register.
     capstone_reg: ppc_reg,
@@ -13,7 +14,7 @@ pub struct PPCRegister {
     bits: usize,
 }
 
-impl PPCRegister {
+impl PpcRegister {
     // pub fn bits(&self) -> usize {
     //     self.bits
     // }
@@ -31,208 +32,208 @@ impl PPCRegister {
     }
 }
 
-const PPC_REGISTERS: &'static [PPCRegister] = &[
-    PPCRegister {
+const PPC_REGISTERS: &[PpcRegister] = &[
+    PpcRegister {
         name: "r0",
         capstone_reg: ppc_reg::PPC_REG_R0,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r1",
         capstone_reg: ppc_reg::PPC_REG_R1,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r2",
         capstone_reg: ppc_reg::PPC_REG_R2,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r3",
         capstone_reg: ppc_reg::PPC_REG_R3,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r4",
         capstone_reg: ppc_reg::PPC_REG_R4,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r5",
         capstone_reg: ppc_reg::PPC_REG_R5,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r6",
         capstone_reg: ppc_reg::PPC_REG_R6,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r7",
         capstone_reg: ppc_reg::PPC_REG_R7,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r8",
         capstone_reg: ppc_reg::PPC_REG_R8,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r9",
         capstone_reg: ppc_reg::PPC_REG_R9,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r10",
         capstone_reg: ppc_reg::PPC_REG_R10,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r11",
         capstone_reg: ppc_reg::PPC_REG_R11,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r12",
         capstone_reg: ppc_reg::PPC_REG_R12,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r13",
         capstone_reg: ppc_reg::PPC_REG_R13,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r14",
         capstone_reg: ppc_reg::PPC_REG_R14,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r15",
         capstone_reg: ppc_reg::PPC_REG_R15,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r16",
         capstone_reg: ppc_reg::PPC_REG_R16,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r17",
         capstone_reg: ppc_reg::PPC_REG_R17,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r18",
         capstone_reg: ppc_reg::PPC_REG_R18,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r19",
         capstone_reg: ppc_reg::PPC_REG_R19,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r20",
         capstone_reg: ppc_reg::PPC_REG_R20,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r21",
         capstone_reg: ppc_reg::PPC_REG_R21,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r22",
         capstone_reg: ppc_reg::PPC_REG_R22,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r23",
         capstone_reg: ppc_reg::PPC_REG_R23,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r24",
         capstone_reg: ppc_reg::PPC_REG_R24,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r25",
         capstone_reg: ppc_reg::PPC_REG_R25,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r26",
         capstone_reg: ppc_reg::PPC_REG_R26,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r27",
         capstone_reg: ppc_reg::PPC_REG_R27,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r28",
         capstone_reg: ppc_reg::PPC_REG_R28,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r29",
         capstone_reg: ppc_reg::PPC_REG_R29,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r30",
         capstone_reg: ppc_reg::PPC_REG_R30,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "r31",
         capstone_reg: ppc_reg::PPC_REG_R31,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "cr0",
         capstone_reg: ppc_reg::PPC_REG_CR0,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "cr1",
         capstone_reg: ppc_reg::PPC_REG_CR1,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "cr2",
         capstone_reg: ppc_reg::PPC_REG_CR2,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "cr3",
         capstone_reg: ppc_reg::PPC_REG_CR3,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "cr4",
         capstone_reg: ppc_reg::PPC_REG_CR4,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "cr5",
         capstone_reg: ppc_reg::PPC_REG_CR5,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "cr6",
         capstone_reg: ppc_reg::PPC_REG_CR6,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "cr7",
         capstone_reg: ppc_reg::PPC_REG_CR7,
         bits: 32,
     },
-    PPCRegister {
+    PpcRegister {
         name: "ctr",
         capstone_reg: ppc_reg::PPC_REG_CTR,
         bits: 32,
@@ -240,7 +241,7 @@ const PPC_REGISTERS: &'static [PPCRegister] = &[
 ];
 
 /// Takes a capstone register enum and returns a `MIPSRegister`
-pub fn get_register(capstone_id: ppc_reg) -> Result<&'static PPCRegister> {
+pub fn get_register(capstone_id: ppc_reg) -> Result<&'static PpcRegister> {
     for register in PPC_REGISTERS.iter() {
         if register.capstone_reg == capstone_id {
             return Ok(&register);
@@ -382,20 +383,21 @@ pub fn rlwinm_(
       zeros. All other bits are set to ones.
     */
 
-    let mask = if mb < me + 1 {
-        let mb = 32 - mb;
-        let me = 32 - me;
-        let mask = (1 << (mb - me)) - 1;
-        let mask = mask << me;
-        mask
-    } else if mb == me + 1 {
-        0xffff_ffff
-    } else {
-        let mb = 32 - mb;
-        let me = 32 - me;
-        let mask = (1 << (me - mb)) - 1;
-        let mask = mask << mb;
-        mask ^ 0xffff_ffff
+    let mask = match mb.cmp(&(me + 1)) {
+        Ordering::Less => {
+            let mb = 32 - mb;
+            let me = 32 - me;
+            let mask = (1 << (mb - me)) - 1;
+            mask << me
+        }
+        Ordering::Equal => 0xffff_ffff,
+        Ordering::Greater => {
+            let mb = 32 - mb;
+            let me = 32 - me;
+            let mask = (1 << (me - mb)) - 1;
+            let mask = mask << mb;
+            mask ^ 0xffff_ffff
+        }
     };
 
     let block_index = {
@@ -565,7 +567,7 @@ pub fn bclr(
 
             let true_index = {
                 let block = control_flow_graph.new_block()?;
-                block.branch(branch_target.clone());
+                block.branch(branch_target);
                 block.index()
             };
 
@@ -587,7 +589,7 @@ pub fn bclr(
 
             let true_index = {
                 let block = control_flow_graph.new_block()?;
-                block.branch(branch_target.clone());
+                block.branch(branch_target);
                 block.index()
             };
 
@@ -616,7 +618,7 @@ pub fn bclr(
 
             let true_index = {
                 let block = control_flow_graph.new_block()?;
-                block.branch(branch_target.clone());
+                block.branch(branch_target);
                 block.index()
             };
 
@@ -638,7 +640,7 @@ pub fn bclr(
 
             let true_index = {
                 let block = control_flow_graph.new_block()?;
-                block.branch(branch_target.clone());
+                block.branch(branch_target);
                 block.index()
             };
 
@@ -667,7 +669,7 @@ pub fn bclr(
 
             let true_index = {
                 let block = control_flow_graph.new_block()?;
-                block.branch(branch_target.clone());
+                block.branch(branch_target);
                 block.index()
             };
 
@@ -696,7 +698,7 @@ pub fn bclr(
 
             let true_index = {
                 let block = control_flow_graph.new_block()?;
-                block.branch(branch_target.clone());
+                block.branch(branch_target);
                 block.index()
             };
 
@@ -801,7 +803,7 @@ pub fn lbz(control_flow_graph: &mut ControlFlowGraph, instruction: &capstone::In
 
     // get operands
     let dst = get_register(detail.operands[0].reg())?.scalar();
-    let base = get_register(detail.operands[1].mem().base.into())?.expression();
+    let base = get_register(detail.operands[1].mem().base)?.expression();
     let offset = detail.operands[1].mem().disp;
     let offset = expr_const(offset as u64, 32);
 
@@ -810,7 +812,7 @@ pub fn lbz(control_flow_graph: &mut ControlFlowGraph, instruction: &capstone::In
 
         let ea = Expr::add(offset, base)?;
 
-        let temp = block.temp(8);
+        let temp = Scalar::temp(instruction.address, 8);
         block.load(temp.clone(), ea);
         block.assign(dst.clone(), Expression::zext(dst.bits(), temp.into())?);
 
@@ -849,7 +851,7 @@ pub fn lwz(control_flow_graph: &mut ControlFlowGraph, instruction: &capstone::In
 
     // get operands
     let dst = get_register(detail.operands[0].reg())?.scalar();
-    let base = get_register(detail.operands[1].mem().base.into())?.expression();
+    let base = get_register(detail.operands[1].mem().base)?.expression();
     let offset = detail.operands[1].mem().disp;
     let offset = expr_const(offset as u64, 32);
 
@@ -877,7 +879,7 @@ pub fn lwzu(
 
     // get operands
     let dst = get_register(detail.operands[0].reg())?.scalar();
-    let base = get_register(detail.operands[1].mem().base.into())?.scalar();
+    let base = get_register(detail.operands[1].mem().base)?.scalar();
     let offset = detail.operands[1].mem().disp;
     let offset = expr_const(offset as u64, 32);
 
@@ -909,7 +911,7 @@ pub fn lis(control_flow_graph: &mut ControlFlowGraph, instruction: &capstone::In
         let block = control_flow_graph.new_block()?;
 
         let src = Expression::or(
-            Expression::and(src.clone(), expr_const(0x0000ffff, 32))?,
+            Expression::and(src.clone(), expr_const(0x0000_ffff, 32))?,
             Expression::shl(src, expr_const(16, 32))?,
         )?;
 
@@ -1070,7 +1072,7 @@ pub fn srawi(
     let block_index = {
         let block = control_flow_graph.new_block()?;
 
-        block.assign(dst, Expression::sra(lhs, rhs)?);
+        block.assign(dst, Expression::ashr(lhs, rhs)?);
 
         block.index()
     };
@@ -1086,7 +1088,7 @@ pub fn stw(control_flow_graph: &mut ControlFlowGraph, instruction: &capstone::In
 
     // get operands
     let src = get_register(detail.operands[0].reg())?.expression();
-    let base = get_register(detail.operands[1].mem().base.into())?.expression();
+    let base = get_register(detail.operands[1].mem().base)?.expression();
     let offset = detail.operands[1].mem().disp;
     let offset = expr_const(offset as u64, 32);
 
@@ -1113,7 +1115,7 @@ pub fn stmw(
     let detail = details(instruction)?;
 
     // get operands
-    let base = get_register(detail.operands[1].mem().base.into())?.expression();
+    let base = get_register(detail.operands[1].mem().base)?.expression();
     let offset = detail.operands[1].mem().disp;
     let mut offset = const_(offset as u64, 32);
 
@@ -1121,8 +1123,8 @@ pub fn stmw(
         let block = control_flow_graph.new_block()?;
 
         let mut start_register: Option<usize> = None;
-        for i in 0..PPC_REGISTERS.len() {
-            if PPC_REGISTERS[i].capstone_reg == detail.operands[0].reg() {
+        for (i, reg) in PPC_REGISTERS.iter().enumerate() {
+            if reg.capstone_reg == detail.operands[0].reg() {
                 start_register = Some(i);
                 break;
             }
@@ -1158,7 +1160,7 @@ pub fn stwu(
 
     // get operands
     let src = get_register(detail.operands[0].reg())?.expression();
-    let base = get_register(detail.operands[1].mem().base.into())?.scalar();
+    let base = get_register(detail.operands[1].mem().base)?.scalar();
     let offset = detail.operands[1].mem().disp;
     let offset = expr_const(offset as u64, 32);
 

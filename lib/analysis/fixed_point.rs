@@ -1,7 +1,7 @@
 //! A fixed-point engine for data-flow analysis.
 
-use error::*;
-use il;
+use crate::error::*;
+use crate::il;
 use std::collections::{HashMap, VecDeque};
 use std::fmt::Debug;
 
@@ -89,14 +89,12 @@ where
             };
             if force {
                 state = analysis.join(state, in_state)?;
-            } else {
-                if let Some(ordering) = ordering {
-                    bail!(
-                        "Found a state which was not >= previous state (it was {}) @ {}",
-                        ordering,
-                        location
-                    );
-                }
+            } else if let Some(ordering) = ordering {
+                bail!(
+                    "Found a state which was not >= previous state (it was {}) @ {}",
+                    ordering,
+                    location
+                );
             }
         }
 
@@ -191,14 +189,12 @@ where
             };
             if force {
                 state = analysis.join(state, in_state)?;
-            } else {
-                if let Some(ordering) = ordering {
-                    bail!(
-                        "Found a state which was not >= previous state (it was {}) @ {}",
-                        ordering,
-                        location
-                    );
-                }
+            } else if let Some(ordering) = ordering {
+                bail!(
+                    "Found a state which was not >= previous state (it was {}) @ {}",
+                    ordering,
+                    location
+                );
             }
         }
 

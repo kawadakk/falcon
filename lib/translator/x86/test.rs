@@ -1,11 +1,11 @@
-use architecture;
-use architecture::Endian;
-use executor::*;
-use il;
-use memory;
-use translator::x86::Amd64;
-use translator::Translator;
-use RC;
+use crate::architecture;
+use crate::architecture::Endian;
+use crate::executor::*;
+use crate::il;
+use crate::memory;
+use crate::translator::x86::Amd64;
+use crate::translator::{Options, Translator};
+use crate::RC;
 
 fn init_amd64_driver<'d>(
     instruction_bytes: Vec<u8>,
@@ -85,7 +85,39 @@ fn lea() {
 
     let translator = Amd64::new();
 
-    let _ = translator.translate_block(&bytes, 0).unwrap();
+    let _ = translator
+        .translate_block(&bytes, 0, &Options::new())
+        .unwrap();
+}
+
+#[test]
+fn movd() {
+    // movd xmm1, esi
+    // nop
+    let bytes: Vec<u8> = vec![0x66, 0x0f, 0x6e, 0xce, 0x90];
+
+    let driver = init_amd64_driver(
+        bytes.clone(),
+        vec![
+            ("xmm1", mk128const(0x00000000_11111111, 0x22222222_33333333)),
+            ("rsi", il::const_(0x11112222_deadbeef, 64)),
+        ],
+        Memory::new(Endian::Little),
+    );
+
+    let driver = step_to(driver, 0x4);
+
+    assert_eq!(driver.state().get_scalar("xmm1").unwrap().bits(), 128);
+
+    assert!(eval(
+        &il::Expression::cmpeq(
+            driver.state().get_scalar("xmm1").unwrap().clone().into(),
+            mk128const(0x00000000_00000000, 0x00000000_deadbeef).into()
+        )
+        .unwrap()
+    )
+    .unwrap()
+    .is_one());
 }
 
 #[test]
@@ -187,5 +219,45 @@ fn pmovmskb() {
             .value_u64()
             .unwrap(),
         0b01010000_11111010
+    );
+}
+
+#[test]
+fn rol() {
+    // rol rax, 0x11
+    // nop
+    let bytes: Vec<u8> = vec![0x48, 0xc1, 0xc0, 0x11, 0x90];
+
+    let driver = init_amd64_driver(
+        bytes.clone(),
+        vec![("rax", il::const_(0xbfeffffffd00, 64))],
+        Memory::new(Endian::Little),
+    );
+
+    let driver = step_to(driver, 0x4);
+
+    assert_eq!(
+        driver.state().get_scalar("rax").unwrap(),
+        &il::const_(0x7fdffffffa000001, 64)
+    );
+}
+
+#[test]
+fn ror() {
+    // ror r8, 0x11
+    // nop
+    let bytes: Vec<u8> = vec![0x49, 0xc1, 0xc8, 0x11, 0x90];
+
+    let driver = init_amd64_driver(
+        bytes.clone(),
+        vec![("r8", il::const_(0x7fdfffffed200001, 64))],
+        Memory::new(Endian::Little),
+    );
+
+    let driver = step_to(driver, 0x4);
+
+    assert_eq!(
+        driver.state().get_scalar("r8").unwrap(),
+        &il::const_(0xbfeffffff690, 64)
     );
 }

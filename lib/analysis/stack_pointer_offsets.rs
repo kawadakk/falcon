@@ -6,18 +6,18 @@
 //! This analysis works off a very simple lattice, Top/Value/Bottom, where Value
 //! is an isize.
 
-use analysis::fixed_point;
-use architecture::Architecture;
-use error::*;
-use executor::eval;
-use il;
+use crate::analysis::fixed_point;
+use crate::architecture::Architecture;
+use crate::error::*;
+use crate::executor::eval;
+use crate::il;
 use std::cmp::{Ordering, PartialOrd};
 use std::collections::HashMap;
 
 /// Determine offset of stack pointer from program entry at each place in the
 /// program.
-pub fn stack_pointer_offsets<'f>(
-    function: &'f il::Function,
+pub fn stack_pointer_offsets(
+    function: &il::Function,
     architecture: &dyn Architecture,
 ) -> Result<HashMap<il::ProgramLocation, StackPointerOffset>> {
     let spoa = StackPointerOffsetAnalysis {
@@ -28,8 +28,8 @@ pub fn stack_pointer_offsets<'f>(
 
 /// Returns true if there is a valid StackPointerOffset value for every location
 /// in the function.
-pub fn perfect<'f>(
-    stack_pointer_offsets: &HashMap<il::RefProgramLocation<'f>, StackPointerOffset>,
+pub fn perfect(
+    stack_pointer_offsets: &HashMap<il::RefProgramLocation, StackPointerOffset>,
 ) -> bool {
     stack_pointer_offsets.iter().all(|(_, spo)| spo.is_value())
 }
@@ -44,10 +44,7 @@ pub enum StackPointerOffset {
 
 impl StackPointerOffset {
     pub fn is_top(&self) -> bool {
-        match self {
-            StackPointerOffset::Top => true,
-            _ => false,
-        }
+        matches!(self, StackPointerOffset::Top)
     }
 
     pub fn is_value(&self) -> bool {
@@ -55,10 +52,7 @@ impl StackPointerOffset {
     }
 
     pub fn is_bototm(&self) -> bool {
-        match self {
-            StackPointerOffset::Bottom => true,
-            _ => false,
-        }
+        matches!(self, StackPointerOffset::Bottom)
     }
 
     pub fn value(&self) -> Option<isize> {
@@ -75,7 +69,7 @@ impl StackPointerOffset {
             IntermediateOffset::Value(value) => StackPointerOffset::Value(
                 value
                     .value_u64()
-                    .ok_or(ErrorKind::Analysis("Stack pointer was not u64".to_string()))?
+                    .ok_or_else(|| ErrorKind::Analysis("Stack pointer was not u64".to_string()))?
                     as isize,
             ),
         })
@@ -150,7 +144,7 @@ impl StackPointerOffsetAnalysis {
                             let expr =
                                 src.replace_scalar(&self.stack_pointer, &constant.clone().into())?;
                             if expr.all_constants() {
-                                IntermediateOffset::Value(eval(&expr)?.into())
+                                IntermediateOffset::Value(eval(&expr)?)
                             } else {
                                 IntermediateOffset::Top
                             }

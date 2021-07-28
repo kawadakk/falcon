@@ -1,6 +1,6 @@
 //! An `Instruction` holds an `Operation`.
 
-use il::*;
+use crate::il::*;
 use std::fmt;
 
 /// An `Instruction` represents location, and non-semantical information about
@@ -13,7 +13,7 @@ use std::fmt;
 /// an `Instruction` manually. You should use the methods on `Block` which
 /// correspond to the `Operation` you wish to create, and the `Instruction`
 /// will be created automatically.
-#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, Default)]
 pub struct Instruction {
     operation: Operation,
     index: usize,
@@ -30,8 +30,8 @@ impl Instruction {
     /// that block.
     pub fn new(index: usize, operation: Operation) -> Instruction {
         Instruction {
-            operation: operation,
-            index: index,
+            operation,
+            index,
             comment: None,
             address: None,
         }
@@ -79,12 +79,7 @@ impl Instruction {
     /// You almost never want to call this function. You should use the
     /// `intrinsic` method on `il::Block` instead.
     pub fn intrinsic(index: usize, intrinsic: Intrinsic) -> Instruction {
-        Instruction::new(
-            index,
-            Operation::Intrinsic {
-                intrinsic: intrinsic,
-            },
-        )
+        Instruction::new(index, Operation::Intrinsic { intrinsic })
     }
 
     /// Create a new `Nop` instruction.
@@ -93,43 +88,36 @@ impl Instruction {
     /// You almost never want to call this function. You should use the
     /// `nop` method on `il::Block` instead.
     pub fn nop(index: usize) -> Instruction {
-        Instruction::new(index, Operation::Nop)
+        Instruction::new(index, Operation::nop())
+    }
+
+    /// Create a new `Nop` instruction as placeholder for the given `Operation`.
+    ///
+    /// # Warning
+    /// You almost never want to call this function. You should use the
+    /// `nop_placeholder` method on `il::Block` instead.
+    pub fn placeholder(index: usize, operation: Operation) -> Instruction {
+        Instruction::new(index, Operation::placeholder(operation))
     }
 
     /// Returns `true` if the `Operation` for this `Instruction` is `Operation::Assign`
     pub fn is_assign(&self) -> bool {
-        if let Operation::Assign { .. } = self.operation {
-            true
-        } else {
-            false
-        }
+        matches!(self.operation, Operation::Assign { .. })
     }
 
     /// Returns `true` if the `Operation` for this `Instruction` is `Operation::Store`
     pub fn is_store(&self) -> bool {
-        if let Operation::Store { .. } = self.operation {
-            true
-        } else {
-            false
-        }
+        matches!(self.operation, Operation::Store { .. })
     }
 
     /// Returns `true` if the `Operation` for this `Instruction` is `Operation::Load`
     pub fn is_load(&self) -> bool {
-        if let Operation::Load { .. } = self.operation {
-            true
-        } else {
-            false
-        }
+        matches!(self.operation, Operation::Load { .. })
     }
 
     /// Returns `true` if the `Operation` for this `Instruction` is `Operation::Brc`
     pub fn is_branch(&self) -> bool {
-        if let Operation::Branch { .. } = self.operation {
-            true
-        } else {
-            false
-        }
+        matches!(self.operation, Operation::Branch { .. })
     }
 
     /// Get the `Operation` for this `Instruction`
@@ -153,7 +141,7 @@ impl Instruction {
 
     /// Get the optional comment for this `Instruction`
     pub fn comment(&self) -> Option<&str> {
-        self.comment.as_ref().map(|s| s.as_str())
+        self.comment.as_deref()
     }
 
     /// Set the optional comment for this `Instruction`
@@ -168,7 +156,7 @@ impl Instruction {
     /// example, applying SSA to a `Function` will cause `Phi` instructions to be inserted, and
     /// these instructions will not have addresses.
     pub fn address(&self) -> Option<u64> {
-        self.address.clone()
+        self.address
     }
 
     /// Set the optional address for this `Instruction`
@@ -180,7 +168,7 @@ impl Instruction {
     pub(crate) fn clone_new_index(&self, index: usize) -> Instruction {
         Instruction {
             operation: self.operation.clone(),
-            index: index,
+            index,
             comment: self.comment.clone(),
             address: self.address,
         }

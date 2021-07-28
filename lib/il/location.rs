@@ -13,7 +13,7 @@
 //! Therefor, we have `ProgramLocation`, which is an Owned type in its own right with no
 //! references.
 
-use il::*;
+use crate::il::*;
 use std::fmt;
 
 /// A location applied to a `Program`.
@@ -30,8 +30,8 @@ impl<'p> RefProgramLocation<'p> {
         function_location: RefFunctionLocation<'p>,
     ) -> RefProgramLocation<'p> {
         RefProgramLocation {
-            function: function,
-            function_location: function_location,
+            function,
+            function_location,
         }
     }
 
@@ -148,21 +148,23 @@ impl<'p> RefProgramLocation<'p> {
     /// This works by locating the location in the other `Program` based on
     /// `Function`, `Block`, and `Instruction` indices.
     pub fn migrate<'m>(&self, program: &'m Program) -> Result<RefProgramLocation<'m>> {
-        let function = program.function(self.function().index().unwrap()).ok_or(
-            ErrorKind::ProgramLocationMigration(format!(
-                "Could not find function {}",
-                self.function.index().unwrap()
-            )),
-        )?;
+        let function = program
+            .function(self.function().index().unwrap())
+            .ok_or_else(|| {
+                ErrorKind::ProgramLocationMigration(format!(
+                    "Could not find function {}",
+                    self.function.index().unwrap()
+                ))
+            })?;
         let function_location = match self.function_location {
             RefFunctionLocation::Instruction(block, instruction) => {
                 let block = function.block(block.index())?;
-                let instruction = block.instruction(instruction.index()).ok_or(
+                let instruction = block.instruction(instruction.index()).ok_or_else(|| {
                     ErrorKind::ProgramLocationMigration(format!(
                         "Could not find instruction {}",
                         instruction.index()
-                    )),
-                )?;
+                    ))
+                })?;
                 RefFunctionLocation::Instruction(block, instruction)
             }
             RefFunctionLocation::Edge(edge) => {
@@ -175,8 +177,8 @@ impl<'p> RefProgramLocation<'p> {
             }
         };
         Ok(RefProgramLocation {
-            function: function,
-            function_location: function_location,
+            function,
+            function_location,
         })
     }
 
@@ -426,8 +428,8 @@ impl ProgramLocation {
         function_location: FunctionLocation,
     ) -> ProgramLocation {
         ProgramLocation {
-            function_index: function_index,
-            function_location: function_location,
+            function_index,
+            function_location,
         }
     }
 

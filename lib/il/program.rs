@@ -1,12 +1,12 @@
 //! A `Program` holds multiple `Function`.
 
-use il::*;
+use crate::il::*;
+use crate::RC;
 use std::collections::BTreeMap;
 use std::fmt;
-use RC;
 
 /// A representation of a program by `il::Function`
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct Program {
     // Mapping of function indices (not addresses) to `Function`.
     functions: BTreeMap<usize, RC<Function>>,
@@ -57,10 +57,7 @@ impl Program {
     /// A `Function` index is assigned by `Program` and is not the address where the `Function`
     /// was discovered.
     pub fn function(&self, index: usize) -> Option<&Function> {
-        match self.functions.get(&index) {
-            Some(f) => Some(f),
-            None => None,
-        }
+        self.functions.get(&index).map(|f| f.as_ref())
     }
 
     /// Add a `Function` to the `Program`.

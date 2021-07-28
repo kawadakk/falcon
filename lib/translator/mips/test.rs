@@ -1,10 +1,10 @@
-use architecture;
-use architecture::Endian;
-use executor::*;
-use il::*;
-use memory;
-use translator::mips::*;
-use RC;
+use crate::architecture;
+use crate::architecture::Endian;
+use crate::executor::*;
+use crate::il::*;
+use crate::memory;
+use crate::translator::mips::*;
+use crate::RC;
 
 #[macro_use]
 macro_rules! backing {
@@ -2069,7 +2069,7 @@ fn nop() {
         .unwrap()
         .operation()
     {
-        Operation::Nop => Some(Operation::Nop),
+        Operation::Nop { .. } => Some(Operation::nop()),
         _ => None,
     };
 

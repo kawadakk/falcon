@@ -1,10 +1,11 @@
-use error::*;
+use crate::error::*;
+use crate::il::Expression as Expr;
+use crate::il::*;
+use crate::translator::x86::x86register::{get_register, X86Register};
 use falcon_capstone::capstone;
 use falcon_capstone::capstone::cs_x86_op;
 use falcon_capstone::capstone_sys::{x86_op_type, x86_reg};
-use il::Expression as Expr;
-use il::*;
-use translator::x86::x86register::{get_register, X86Register};
+use std::cmp::Ordering;
 
 /// Mode used by translators to pick the correct registers/operations
 #[derive(Clone, Debug)]
@@ -60,8 +61,8 @@ impl Mode {
             }
             x86_op_type::X86_OP_MEM => {
                 let mem = operand.mem();
-                let base_capstone_reg = capstone::x86_reg::from(mem.base);
-                let index_capstone_reg = capstone::x86_reg::from(mem.index);
+                let base_capstone_reg = mem.base;
+                let index_capstone_reg = mem.index;
 
                 let base = match base_capstone_reg {
                     x86_reg::X86_REG_INVALID => None,
@@ -94,19 +95,21 @@ impl Mode {
                 };
 
                 // handle disp
-                let op = if op.is_some() {
-                    if mem.disp > 0 {
-                        Expr::add(op.unwrap(), expr_const(mem.disp as u64, self.bits()))?
-                    } else if mem.disp < 0 {
-                        Expr::sub(op.unwrap(), expr_const(mem.disp.abs() as u64, self.bits()))?
-                    } else {
-                        op.unwrap()
+                let op = if let Some(op) = op {
+                    match mem.disp.cmp(&0) {
+                        Ordering::Greater => {
+                            Expr::add(op, expr_const(mem.disp as u64, self.bits()))?
+                        }
+                        Ordering::Less => {
+                            Expr::sub(op, expr_const(mem.disp.abs() as u64, self.bits()))?
+                        }
+                        Ordering::Equal => op,
                     }
                 } else {
                     expr_const(mem.disp as u64, self.bits())
                 };
 
-                match x86_reg::from(mem.segment) {
+                match mem.segment {
                     x86_reg::X86_REG_INVALID => Ok(op),
                     x86_reg::X86_REG_CS
                     | x86_reg::X86_REG_DS
@@ -114,15 +117,20 @@ impl Mode {
                     | x86_reg::X86_REG_FS
                     | x86_reg::X86_REG_GS
                     | x86_reg::X86_REG_SS => {
-                        let segment_register =
-                            self.get_register(x86_reg::from(mem.segment))?.get()?;
+                        let segment_register = self.get_register(mem.segment)?.get()?;
                         Ok(Expr::add(segment_register, op)?)
                     }
                     _ => bail!("invalid segment register"),
                 }
             }
             x86_op_type::X86_OP_IMM => {
-                Ok(expr_const(operand.imm() as u64, operand.size as usize * 8))
+                // https://github.com/aquynh/capstone/issues/1586
+                let operand_size = if operand.size == 0 {
+                    8
+                } else {
+                    operand.size as usize * 8
+                };
+                Ok(expr_const(operand.imm() as u64, operand_size))
             }
             #[cfg(not(feature = "capstone4"))]
             x86_op_type::X86_OP_FP => Err("Unhandled operand".into()),
@@ -139,7 +147,7 @@ impl Mode {
         let op = self.operand_value(operand, instruction)?;
 
         if operand.type_ == x86_op_type::X86_OP_MEM {
-            let temp = block.temp(operand.size as usize * 8);
+            let temp = Scalar::temp(instruction.address, operand.size as usize * 8);
             block.load(temp.clone(), op);
             return Ok(temp.into());
         }
@@ -172,8 +180,13 @@ impl Mode {
     }
 
     /// Convenience function to pop a value off the stack
-    pub fn pop_value(&self, block: &mut Block, bits: usize) -> Result<Expression> {
-        let temp = block.temp(bits);
+    pub fn pop_value(
+        &self,
+        block: &mut Block,
+        bits: usize,
+        instruction: &capstone::Instr,
+    ) -> Result<Expression> {
+        let temp = Scalar::temp(instruction.address, bits);
 
         block.load(temp.clone(), self.sp().into());
         block.assign(

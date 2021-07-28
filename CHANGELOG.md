@@ -1,7 +1,68 @@
 # Changelog
 
+## [0.5.2]
+
+* Introduction of Expression::Ashr. This expression-type exists behind a feature flag until 0.6.0, and the existing Expression::sra method will now generate deprecation warnings.
+
+## [0.5.1]
+
+### Breaking
+
+* Pulled the "Conditional Operation" feature we were going to implement in 0.5.0.
+
+### Fixes
+
+* Remove duplicated function entries.
+* bswap operand width is not dependent on disassembly mode.
+* Fixed a bug in il::ControlFlowGraph::merge that sometimes caused invalid
+graphs to be generated.
+
+## [0.5.0] (Yanked)
+
+### Fixes
+
+* When shifting constants left by very large values, num-bigint would sometimes allocate too much memory and crash. We check for this now, and set the result to 0.
+
+### Breaking
+* Added lifter options
+* Nop takes a placeholder instruction
+* Added Conditional operation
+* Added feature "sanity-checks" to abort early on creation of likely bad IL. Used to help check possible lifter errors.
+* oblivia-simplex Linting, falcon now passes cargo clippy --all
+* capstone4 is now the default capstone.
+
+## [0.4.12] - 17-APR-2020
+
+* emmanuel099 Multiple improvements to the graph library
+* emmanuel099 Natural loops detection
+* emmanuel099 Use Semi-NCA Algorithm in `compute_immediate_dominators`
+* anon8675309 Remove docker network dependency
+* anon8675309 Added scripts to get set up outside of Docker
+* Use instruction address as temporary scalar index
+
+## [0.4.11] - 24-FEB-2020
+
+* Multiple x86 semantics fix-ups
+
+## [0.4.10] - 15-FEB-2020
+
+* Update goblin to `0.2`
+
+## [0.4.9] - 10-FEB-2020
+
+* emmanuel099 Fixed implementational defect in Graph::edges_in/edges_out
+* emmanuel099 Created SSA tranformation
+
+## [0.4.8] - 01-FEB-2020
+
+* jeandudey Ported falcon to Rust 2018 edition.
+* emmanuel099 Lifted additional x86 instructions to intrinsics.
+* emmanuel099 Fixed computation of dominance frontiers.
+* emmanuel099 Drop dedup from scalars and scalars_mut #56
+
 ## [0.4.7] - 08-JAN-2020
-* Added support for capstone4, thanks to github.com/wuggen. Capstone4 support is guarded behind the feature "capstone4".
+* Added support for capstone4, thanks to github.com/wuggen. Capstone4 support is
+guarded behind the feature "capstone4".
 * Minor touchups for new warnings as rust compiler evolves.
 
 ## [0.4.6] - 02-NOV-2019

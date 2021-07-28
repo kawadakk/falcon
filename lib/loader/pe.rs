@@ -1,10 +1,9 @@
 //! ELF Linker/Loader
 
-use architecture::X86;
-use goblin;
-use loader::*;
-use memory::backing::Memory;
-use memory::MemoryPermissions;
+use crate::architecture::X86;
+use crate::loader::*;
+use crate::memory::backing::Memory;
+use crate::memory::MemoryPermissions;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
@@ -23,19 +22,16 @@ impl Pe {
         let architecture = {
             let pe = goblin::pe::PE::parse(&bytes).map_err(|_| "Not a valid PE")?;
 
-            let architecture =
-                if pe.header.coff_header.machine == goblin::pe::header::COFF_MACHINE_X86 {
-                    Box::new(X86::new())
-                } else {
-                    bail!("Unsupported Architecture");
-                };
-
-            architecture
+            if pe.header.coff_header.machine == goblin::pe::header::COFF_MACHINE_X86 {
+                Box::new(X86::new())
+            } else {
+                bail!("Unsupported Architecture");
+            }
         };
 
         Ok(Pe {
-            bytes: bytes,
-            architecture: architecture,
+            bytes,
+            architecture,
         })
     }
 

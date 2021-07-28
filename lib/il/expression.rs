@@ -23,7 +23,7 @@
 
 use std::fmt;
 
-use il::*;
+use crate::il::*;
 
 /// An IL Expression.
 #[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
@@ -43,6 +43,8 @@ pub enum Expression {
     Xor(Box<Expression>, Box<Expression>),
     Shl(Box<Expression>, Box<Expression>),
     Shr(Box<Expression>, Box<Expression>),
+    #[cfg(feature = "il-expression-ashr")]
+    AShr(Box<Expression>, Box<Expression>),
 
     Cmpeq(Box<Expression>, Box<Expression>),
     Cmpneq(Box<Expression>, Box<Expression>),
@@ -74,6 +76,8 @@ impl Expression {
             | Expression::Xor(ref lhs, _)
             | Expression::Shl(ref lhs, _)
             | Expression::Shr(ref lhs, _) => lhs.bits(),
+            #[cfg(feature = "il-expression-ashr")]
+            Expression::AShr(ref lhs, _) => lhs.bits(),
             Expression::Cmpeq(_, _)
             | Expression::Cmpneq(_, _)
             | Expression::Cmplts(_, _)
@@ -85,11 +89,9 @@ impl Expression {
         }
     }
 
-    /// Ensures the bits of both lhs and rhs are the same. If no_flags is true,
-    /// Also ensures this expression doesn't include flags (which have a sort
-    /// of 0)
-    fn ensure_sort(lhs: &Expression, rhs: &Expression, no_flags: bool) -> Result<()> {
-        if lhs.bits() != rhs.bits() || (no_flags && lhs.bits() == 0) {
+    /// Ensures the bits of both lhs and rhs are the same.
+    fn ensure_sort(lhs: &Expression, rhs: &Expression) -> Result<()> {
+        if lhs.bits() != rhs.bits() {
             Err(ErrorKind::Sort.into())
         } else {
             Ok(())
@@ -157,6 +159,10 @@ impl Expression {
                         Expression::Shr(ref lhs, ref rhs) => {
                             Expression::shr(self.map(lhs)?, self.map(rhs)?)?
                         }
+                        #[cfg(feature = "il-expression-ashr")]
+                        Expression::AShr(ref lhs, ref rhs) => {
+                            Expression::ashr(self.map(lhs)?, self.map(rhs)?)?
+                        }
                         Expression::Cmpeq(ref lhs, ref rhs) => {
                             Expression::cmpeq(self.map(lhs)?, self.map(rhs)?)?
                         }
@@ -180,7 +186,7 @@ impl Expression {
             }
         }
 
-        let map = Map { f: f };
+        let map = Map { f };
 
         map.map(self)
     }
@@ -222,6 +228,8 @@ impl Expression {
             | Expression::Cmpneq(ref lhs, ref rhs)
             | Expression::Cmplts(ref lhs, ref rhs)
             | Expression::Cmpltu(ref lhs, ref rhs) => lhs.all_constants() && rhs.all_constants(),
+            #[cfg(feature = "il-expression-ashr")]
+            Expression::AShr(ref lhs, ref rhs) => lhs.all_constants() && rhs.all_constants(),
             Expression::Zext(_, ref rhs)
             | Expression::Sext(_, ref rhs)
             | Expression::Trun(_, ref rhs) => rhs.all_constants(),
@@ -256,6 +264,11 @@ impl Expression {
                 scalars.append(&mut lhs.scalars());
                 scalars.append(&mut rhs.scalars());
             }
+            #[cfg(feature = "il-expression-ashr")]
+            Expression::AShr(ref lhs, ref rhs) => {
+                scalars.append(&mut lhs.scalars());
+                scalars.append(&mut rhs.scalars());
+            }
             Expression::Zext(_, ref rhs)
             | Expression::Sext(_, ref rhs)
             | Expression::Trun(_, ref rhs) => {
@@ -267,8 +280,6 @@ impl Expression {
                 scalars.append(&mut else_.scalars());
             }
         }
-        scalars.sort();
-        scalars.dedup();
         scalars
     }
 
@@ -297,6 +308,11 @@ impl Expression {
                 scalars.append(&mut lhs.scalars_mut());
                 scalars.append(&mut rhs.scalars_mut());
             }
+            #[cfg(feature = "il-expression-ashr")]
+            Expression::AShr(ref mut lhs, ref mut rhs) => {
+                scalars.append(&mut lhs.scalars_mut());
+                scalars.append(&mut rhs.scalars_mut());
+            }
             Expression::Zext(_, ref mut rhs)
             | Expression::Sext(_, ref mut rhs)
             | Expression::Trun(_, ref mut rhs) => {
@@ -308,8 +324,6 @@ impl Expression {
                 scalars.append(&mut else_.scalars_mut());
             }
         }
-        scalars.sort();
-        scalars.dedup();
         scalars
     }
 
@@ -342,24 +356,27 @@ impl Expression {
     /// Create an addition `Expression`.
     /// # Error
     /// The sort of the lhs and the rhs are not the same
+    #[allow(clippy::should_implement_trait)]
     pub fn add(lhs: Expression, rhs: Expression) -> Result<Expression> {
-        Expression::ensure_sort(&lhs, &rhs, true)?;
+        Expression::ensure_sort(&lhs, &rhs)?;
         Ok(Expression::Add(Box::new(lhs), Box::new(rhs)))
     }
 
     /// Create a subtraction `Expression`.
     /// # Error
     /// The sort of the lhs and the rhs are not the same.
+    #[allow(clippy::should_implement_trait)]
     pub fn sub(lhs: Expression, rhs: Expression) -> Result<Expression> {
-        Expression::ensure_sort(&lhs, &rhs, true)?;
+        Expression::ensure_sort(&lhs, &rhs)?;
         Ok(Expression::Sub(Box::new(lhs), Box::new(rhs)))
     }
 
     /// Create an unsigned multiplication `Expression`.
     /// # Error
     /// The sort of the lhs and the rhs are not the same.
+    #[allow(clippy::should_implement_trait)]
     pub fn mul(lhs: Expression, rhs: Expression) -> Result<Expression> {
-        Expression::ensure_sort(&lhs, &rhs, true)?;
+        Expression::ensure_sort(&lhs, &rhs)?;
         Ok(Expression::Mul(Box::new(lhs), Box::new(rhs)))
     }
 
@@ -367,7 +384,7 @@ impl Expression {
     /// # Error
     /// The sort of the lhs and the rhs are not the same.
     pub fn divu(lhs: Expression, rhs: Expression) -> Result<Expression> {
-        Expression::ensure_sort(&lhs, &rhs, true)?;
+        Expression::ensure_sort(&lhs, &rhs)?;
         Ok(Expression::Divu(Box::new(lhs), Box::new(rhs)))
     }
 
@@ -375,7 +392,7 @@ impl Expression {
     /// # Error
     /// The sort of the lhs and the rhs are not the same.
     pub fn modu(lhs: Expression, rhs: Expression) -> Result<Expression> {
-        Expression::ensure_sort(&lhs, &rhs, true)?;
+        Expression::ensure_sort(&lhs, &rhs)?;
         Ok(Expression::Modu(Box::new(lhs), Box::new(rhs)))
     }
 
@@ -383,7 +400,7 @@ impl Expression {
     /// # Error
     /// The sort of the lhs and the rhs are not the same.
     pub fn divs(lhs: Expression, rhs: Expression) -> Result<Expression> {
-        Expression::ensure_sort(&lhs, &rhs, true)?;
+        Expression::ensure_sort(&lhs, &rhs)?;
         Ok(Expression::Divs(Box::new(lhs), Box::new(rhs)))
     }
 
@@ -391,7 +408,7 @@ impl Expression {
     /// # Error
     /// The sort of the lhs and the rhs are not the same.
     pub fn mods(lhs: Expression, rhs: Expression) -> Result<Expression> {
-        Expression::ensure_sort(&lhs, &rhs, true)?;
+        Expression::ensure_sort(&lhs, &rhs)?;
         Ok(Expression::Mods(Box::new(lhs), Box::new(rhs)))
     }
 
@@ -399,7 +416,7 @@ impl Expression {
     /// # Error
     /// The sort of the lhs and the rhs are not the same.
     pub fn and(lhs: Expression, rhs: Expression) -> Result<Expression> {
-        Expression::ensure_sort(&lhs, &rhs, true)?;
+        Expression::ensure_sort(&lhs, &rhs)?;
         Ok(Expression::And(Box::new(lhs), Box::new(rhs)))
     }
 
@@ -407,7 +424,7 @@ impl Expression {
     /// # Error
     /// The sort of the lhs and the rhs are not the same.
     pub fn or(lhs: Expression, rhs: Expression) -> Result<Expression> {
-        Expression::ensure_sort(&lhs, &rhs, true)?;
+        Expression::ensure_sort(&lhs, &rhs)?;
         Ok(Expression::Or(Box::new(lhs), Box::new(rhs)))
     }
 
@@ -415,31 +432,66 @@ impl Expression {
     /// # Error
     /// The sort of the lhs and the rhs are not the same.
     pub fn xor(lhs: Expression, rhs: Expression) -> Result<Expression> {
-        Expression::ensure_sort(&lhs, &rhs, true)?;
+        Expression::ensure_sort(&lhs, &rhs)?;
         Ok(Expression::Xor(Box::new(lhs), Box::new(rhs)))
     }
 
     /// Create a logical shift-left `Expression`.
     /// # Error
     /// The sort of the lhs and the rhs are not the same.
+    #[allow(clippy::should_implement_trait)]
     pub fn shl(lhs: Expression, rhs: Expression) -> Result<Expression> {
-        Expression::ensure_sort(&lhs, &rhs, true)?;
+        Expression::ensure_sort(&lhs, &rhs)?;
         Ok(Expression::Shl(Box::new(lhs), Box::new(rhs)))
     }
 
     /// Create a logical shift-right `Expression`.
     /// # Error
     /// The sort of the lhs and the rhs are not the same.
+    #[allow(clippy::should_implement_trait)]
     pub fn shr(lhs: Expression, rhs: Expression) -> Result<Expression> {
-        Expression::ensure_sort(&lhs, &rhs, true)?;
+        Expression::ensure_sort(&lhs, &rhs)?;
         Ok(Expression::Shr(Box::new(lhs), Box::new(rhs)))
+    }
+
+    /// Create an arithmetic shift-right `Expression`.
+    /// # Error
+    /// The sort of the lhs and the rhs are not the same.
+    #[allow(clippy::should_implement_trait)]
+    #[cfg(feature = "il-expression-ashr")]
+    pub fn ashr(lhs: Expression, rhs: Expression) -> Result<Expression> {
+        Expression::ensure_sort(&lhs, &rhs)?;
+        Ok(Expression::AShr(Box::new(lhs), Box::new(rhs)))
+    }
+
+    /// Create an arithmetic shift-right `Expression`.
+    /// # Error
+    /// The sort of the lhs and the rhs are not the same.
+    #[allow(clippy::should_implement_trait)]
+    #[cfg(not(feature = "il-expression-ashr"))]
+    pub fn ashr(lhs: Expression, rhs: Expression) -> Result<Expression> {
+        Expression::ensure_sort(&lhs, &rhs)?;
+
+        // Create the mask we apply if that lhs is signed
+        let mask = Expression::shl(expr_const(1, lhs.bits()), rhs.clone())?;
+        let mask = Expression::sub(mask, expr_const(1, lhs.bits()))?;
+        let mask = Expression::shl(
+            mask,
+            Expression::sub(expr_const(lhs.bits() as u64, lhs.bits()), rhs.clone())?,
+        )?;
+
+        // Multiple the mask by the sign bit
+        let expr = Expression::shr(lhs.clone(), expr_const(lhs.bits() as u64 - 1, lhs.bits()))?;
+        let expr = Expression::mul(mask, expr)?;
+
+        Expression::or(expr, Expression::shr(lhs, rhs)?)
     }
 
     /// Create an equals comparison `Expression`.
     /// # Error
     /// The sort of the lhs and the rhs are not the same.
     pub fn cmpeq(lhs: Expression, rhs: Expression) -> Result<Expression> {
-        Expression::ensure_sort(&lhs, &rhs, false)?;
+        Expression::ensure_sort(&lhs, &rhs)?;
         Ok(Expression::Cmpeq(Box::new(lhs), Box::new(rhs)))
     }
 
@@ -447,7 +499,7 @@ impl Expression {
     /// # Error
     /// The sort of the lhs and the rhs are not the same.
     pub fn cmpneq(lhs: Expression, rhs: Expression) -> Result<Expression> {
-        Expression::ensure_sort(&lhs, &rhs, false)?;
+        Expression::ensure_sort(&lhs, &rhs)?;
         Ok(Expression::Cmpneq(Box::new(lhs), Box::new(rhs)))
     }
 
@@ -455,7 +507,7 @@ impl Expression {
     /// # Error
     /// The sort of the lhs and the rhs are not the same.
     pub fn cmpltu(lhs: Expression, rhs: Expression) -> Result<Expression> {
-        Expression::ensure_sort(&lhs, &rhs, false)?;
+        Expression::ensure_sort(&lhs, &rhs)?;
         Ok(Expression::Cmpltu(Box::new(lhs), Box::new(rhs)))
     }
 
@@ -463,7 +515,7 @@ impl Expression {
     /// # Error
     /// The sort of the lhs and the rhs are not the same.
     pub fn cmplts(lhs: Expression, rhs: Expression) -> Result<Expression> {
-        Expression::ensure_sort(&lhs, &rhs, false)?;
+        Expression::ensure_sort(&lhs, &rhs)?;
         Ok(Expression::Cmplts(Box::new(lhs), Box::new(rhs)))
     }
 
@@ -517,6 +569,9 @@ impl Expression {
     ///
     /// This is a pseudo-expression, and emits an expression with
     /// sub-expressions
+    /// 
+    #[cfg(not(feature = "il-expression-ashr"))]
+    #[deprecated(since="0.5.2", note="Please use ashr in anticipation of the new Expression::Ashr type in 0.6")]
     pub fn sra(lhs: Expression, rhs: Expression) -> Result<Expression> {
         if lhs.bits() != rhs.bits() {
             return Err(ErrorKind::Sort.into());
@@ -536,14 +591,14 @@ impl Expression {
             )?
         };
 
-        Ok(Expression::or(
+        Expression::or(
             expr,
             Expression::ite(
                 Expression::cmplts(lhs.clone(), expr_const(0, lhs.bits()))?,
                 mask,
                 expr_const(0, lhs.bits()),
             )?,
-        )?)
+        )
     }
 
     /// Alias for sra
@@ -556,13 +611,13 @@ impl Expression {
     /// This is a pseudo-expression, and emits an expression with
     /// sub-expressions
     pub fn rotl(e: Expression, s: Expression) -> Result<Expression> {
-        Ok(Expression::or(
+        Expression::or(
             Expression::shl(e.clone(), s.clone())?,
             Expression::shr(
                 e.clone(),
-                Expression::sub(expr_const(e.bits() as u64, e.bits()), s.clone())?,
+                Expression::sub(expr_const(e.bits() as u64, e.bits()), s)?,
             )?,
-        )?)
+        )
     }
 
     /// Perform a right-rotation
@@ -577,6 +632,18 @@ impl Expression {
                 Expression::sub(expr_const(e.bits() as u64, e.bits()), s.clone())?,
             )?,
         )?)
+    }
+}
+
+impl From<Scalar> for Expression {
+    fn from(scalar: Scalar) -> Expression {
+        Expression::Scalar(scalar)
+    }
+}
+
+impl From<Constant> for Expression {
+    fn from(constant: Constant) -> Expression {
+        Expression::Constant(constant)
     }
 }
 
@@ -597,6 +664,8 @@ impl fmt::Display for Expression {
             Expression::Xor(ref lhs, ref rhs) => write!(f, "({} ^ {})", lhs, rhs),
             Expression::Shl(ref lhs, ref rhs) => write!(f, "({} << {})", lhs, rhs),
             Expression::Shr(ref lhs, ref rhs) => write!(f, "({} >> {})", lhs, rhs),
+            #[cfg(feature = "il-expression-ashr")]
+            Expression::AShr(ref lhs, ref rhs) => write!(f, "({} >>> {})", lhs, rhs),
             Expression::Cmpeq(ref lhs, ref rhs) => write!(f, "({} == {})", lhs, rhs),
             Expression::Cmpneq(ref lhs, ref rhs) => write!(f, "({} != {})", lhs, rhs),
             Expression::Cmplts(ref lhs, ref rhs) => write!(f, "({} <s {})", lhs, rhs),

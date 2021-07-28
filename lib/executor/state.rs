@@ -1,7 +1,9 @@
-use executor::successor::*;
-/// A concrete state for execution over Falcon IL.
-use executor::*;
+//! A concrete state for execution over Falcon IL.
+
 use std::collections::BTreeMap;
+
+use crate::executor::successor::*;
+use crate::executor::*;
 
 /// A concrete `State`.
 #[derive(Debug, Clone)]
@@ -15,7 +17,7 @@ impl State {
     pub fn new(memory: Memory) -> State {
         State {
             scalars: BTreeMap::new(),
-            memory: memory,
+            memory,
         }
     }
 
@@ -97,6 +99,11 @@ impl State {
                 self.symbolize_expression(lhs)?,
                 self.symbolize_expression(rhs)?,
             )?,
+            #[cfg(feature = "il-expression-ashr")]
+            il::Expression::AShr(ref lhs, ref rhs) => il::Expression::ashr(
+                self.symbolize_expression(lhs)?,
+                self.symbolize_expression(rhs)?,
+            )?,
             il::Expression::Cmpeq(ref lhs, ref rhs) => il::Expression::cmpeq(
                 self.symbolize_expression(lhs)?,
                 self.symbolize_expression(rhs)?,
@@ -135,23 +142,23 @@ impl State {
     /// concrete value.
     pub fn symbolize_and_eval(&self, expression: &il::Expression) -> Result<il::Constant> {
         let expression = self.symbolize_expression(expression)?;
-        Ok(eval(&expression)?)
+        eval(&expression)
     }
 
     /// Execute an `il::Operation`, returning the post-execution `State`.
     pub fn execute(mut self, operation: &il::Operation) -> Result<Successor> {
-        Ok(match *operation {
+        match *operation {
             il::Operation::Assign { ref dst, ref src } => {
                 let src = self.symbolize_and_eval(src)?;
                 self.set_scalar(dst.name(), src);
-                Successor::new(self, SuccessorType::FallThrough)
+                Ok(Successor::new(self, SuccessorType::FallThrough))
             }
             il::Operation::Store { ref index, ref src } => {
                 let src = self.symbolize_and_eval(src)?;
                 let index = self.symbolize_and_eval(index)?;
                 self.memory
                     .store(index.value_u64().ok_or(ErrorKind::TooManyAddressBits)?, src)?;
-                Successor::new(self, SuccessorType::FallThrough)
+                Ok(Successor::new(self, SuccessorType::FallThrough))
             }
             il::Operation::Load { ref dst, ref index } => {
                 let index = self.symbolize_and_eval(index)?;
@@ -161,8 +168,8 @@ impl State {
                 )?;
                 match value {
                     Some(v) => {
-                        self.set_scalar(dst.name(), v.into());
-                        Successor::new(self, SuccessorType::FallThrough)
+                        self.set_scalar(dst.name(), v);
+                        Ok(Successor::new(self, SuccessorType::FallThrough))
                     }
                     None => {
                         bail!("Got invalid concretized address {}", index);
@@ -171,15 +178,21 @@ impl State {
             }
             il::Operation::Branch { ref target } => {
                 let target = self.symbolize_and_eval(target)?;
-                Successor::new(
+                Ok(Successor::new(
                     self,
                     SuccessorType::Branch(target.value_u64().ok_or(ErrorKind::TooManyAddressBits)?),
-                )
+                ))
             }
             il::Operation::Intrinsic { ref intrinsic } => {
-                return Err(ErrorKind::UnhandledIntrinsic(format!("{}", intrinsic)).into());
+                Err(ErrorKind::UnhandledIntrinsic(format!("{}", intrinsic)).into())
             }
-            il::Operation::Nop => Successor::new(self, SuccessorType::FallThrough),
-        })
+            il::Operation::Nop { .. } => Ok(Successor::new(self, SuccessorType::FallThrough)),
+        }
+    }
+}
+
+impl From<Successor> for State {
+    fn from(successor: Successor) -> State {
+        successor.state
     }
 }

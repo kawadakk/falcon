@@ -1,8 +1,9 @@
 //! A `Constant` holds a single value.
 
-use il::*;
+use crate::il::*;
 use num_bigint::{BigInt, BigUint, ToBigInt};
-use num_traits::{FromPrimitive, ToPrimitive};
+use num_traits::{FromPrimitive, One, ToPrimitive, Zero};
+use std::cmp::Ordering;
 use std::fmt;
 use std::ops::*;
 
@@ -26,7 +27,7 @@ impl Constant {
     pub fn new(value: u64, bits: usize) -> Constant {
         Constant {
             value: Constant::trim_value(BigUint::from_u64(value).unwrap(), bits),
-            bits: bits,
+            bits,
         }
     }
 
@@ -34,19 +35,17 @@ impl Constant {
     pub fn new_big(value: BigUint, bits: usize) -> Constant {
         Constant {
             value: Constant::trim_value(value, bits),
-            bits: bits,
+            bits,
         }
     }
 
     /// Crates a constant from a decimal string of the value
-    pub fn from_decimal_string(s: &String, bits: usize) -> Result<Constant> {
+    pub fn from_decimal_string(s: &str, bits: usize) -> Result<Constant> {
         let constant = Constant::new_big(s.parse()?, bits);
-        Ok(if constant.bits() < bits {
-            constant.zext(bits)?
-        } else if constant.bits() > bits {
-            constant.trun(bits)?
-        } else {
-            constant
+        Ok(match constant.bits().cmp(&bits) {
+            Ordering::Less => constant.zext(bits)?,
+            Ordering::Greater => constant.trun(bits)?,
+            Ordering::Equal => constant,
         })
     }
 
@@ -54,7 +53,7 @@ impl Constant {
     pub fn new_zero(bits: usize) -> Constant {
         Constant {
             value: BigUint::from_u64(0).unwrap(),
-            bits: bits,
+            bits,
         }
     }
 
@@ -72,8 +71,7 @@ impl Constant {
             let mask = mask - BigUint::from_i64(1).unwrap();
             let v = self.value.clone() ^ mask;
             let v = v + BigUint::from_u64(1).unwrap();
-            let v = BigInt::from_i64(-1).unwrap() * v.to_bigint().unwrap();
-            v
+            BigInt::from_i64(-1).unwrap() * v.to_bigint().unwrap()
         } else {
             self.value.to_bigint().unwrap()
         }
@@ -86,12 +84,10 @@ impl Constant {
 
     /// Sign-extend the constant out to 64-bits, and return it as an `i64`
     pub fn value_i64(&self) -> Option<i64> {
-        if self.bits() > 64 {
-            None
-        } else if self.bits() == 64 {
-            self.value.to_u64().map(|v| v as i64)
-        } else {
-            self.sext(64).ok()?.value.to_u64().map(|v| v as i64)
+        match self.bits().cmp(&64) {
+            Ordering::Greater => None,
+            Ordering::Equal => self.value.to_u64().map(|v| v as i64),
+            Ordering::Less => self.sext(64).ok()?.value.to_u64().map(|v| v as i64),
         }
     }
 
@@ -107,12 +103,12 @@ impl Constant {
 
     /// Returns true if the value in this Constant is 0, false otherwise.
     pub fn is_zero(&self) -> bool {
-        self.value_u64().map(|v| v == 0).unwrap_or(false)
+        self.value.is_zero()
     }
 
     /// Returns true if the value in this constant is 1, false otherwise.
     pub fn is_one(&self) -> bool {
-        self.value_u64().map(|v| v == 1).unwrap_or(false)
+        self.value.is_one()
     }
 
     pub fn add(&self, rhs: &Constant) -> Result<Constant> {
@@ -129,17 +125,15 @@ impl Constant {
     pub fn sub(&self, rhs: &Constant) -> Result<Constant> {
         if self.bits() != rhs.bits() {
             Err(ErrorKind::Sort.into())
+        } else if self.value < rhs.value {
+            let lhs = self.value.clone();
+            let lhs = lhs | (BigUint::from_u64(1).unwrap() << self.bits);
+            Ok(Constant::new_big(lhs - rhs.value.clone(), self.bits))
         } else {
-            if self.value < rhs.value {
-                let lhs = self.value.clone();
-                let lhs = lhs | (BigUint::from_u64(1).unwrap() << self.bits);
-                Ok(Constant::new_big(lhs - rhs.value.clone(), self.bits))
-            } else {
-                Ok(Constant::new_big(
-                    self.value.clone().sub(rhs.value.clone()),
-                    self.bits,
-                ))
-            }
+            Ok(Constant::new_big(
+                self.value.clone().sub(rhs.value.clone()),
+                self.bits,
+            ))
         }
     }
 
@@ -259,11 +253,23 @@ impl Constant {
         if self.bits() != rhs.bits() {
             Err(ErrorKind::Sort.into())
         } else {
+            // If, for some reason, an analysis generates a very large shift
+            // value (for example << 0xFFFFFFFF_FFFFFFFF:64), this will cause
+            // the bigint library to attempt gigantic memory allocations, and
+            // crash. We have a basic sanity check here to just set the value
+            // to 0 if we are shifting left by a value greater than the variable
+            // width, which is the correct behavior.
             let r = rhs
                 .value
                 .to_usize()
-                .map(|bits| self.value.clone() << bits)
-                .unwrap_or(BigUint::from_u64(0).unwrap());
+                .map(|bits| {
+                    if bits as usize >= self.bits() {
+                        BigUint::from_u64(0).unwrap()
+                    } else {
+                        self.value.clone() << bits
+                    }
+                })
+                .unwrap_or_else(|| BigUint::from_u64(0).unwrap());
             Ok(Constant::new_big(r, self.bits))
         }
     }
@@ -276,7 +282,30 @@ impl Constant {
                 .value
                 .to_usize()
                 .map(|bits| self.value.clone() >> bits)
-                .unwrap_or(BigUint::from_u64(0).unwrap());
+                .unwrap_or_else(|| BigUint::from_u64(0).unwrap());
+            Ok(Constant::new_big(r, self.bits))
+        }
+    }
+
+    pub fn ashr(&self, rhs: &Constant) -> Result<Constant> {
+        if self.bits() != rhs.bits() {
+            Err(ErrorKind::Sort.into())
+        } else {
+            let r = rhs
+                .value
+                .to_usize()
+                .map(|bits| {
+                    let value = self.value() >> bits;
+                    let msb = self.value() >> (self.bits - 1);
+                    if msb.is_zero() {
+                        value
+                    } else {
+                        let all_one = BigUint::from_u64(u64::MAX).unwrap();
+                        let fill = all_one << (self.bits - bits);
+                        fill | value
+                    }
+                })
+                .unwrap_or_else(|| BigUint::from_u64(0).unwrap());
             Ok(Constant::new_big(r, self.bits))
         }
     }
@@ -361,12 +390,6 @@ impl Constant {
 impl fmt::Display for Constant {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "0x{:X}:{}", self.value, self.bits)
-    }
-}
-
-impl Into<Expression> for Constant {
-    fn into(self) -> Expression {
-        Expression::constant(self)
     }
 }
 
@@ -477,6 +500,22 @@ fn constant_shr() {
     assert_eq!(
         Constant::new(0x100, 64).shr(&Constant::new(8, 64)).unwrap(),
         Constant::new(1, 64)
+    );
+}
+
+#[test]
+fn constant_ashr() {
+    assert_eq!(
+        Constant::new(0x40000000, 32)
+            .ashr(&Constant::new(0x10, 32))
+            .unwrap(),
+        Constant::new(0x00004000, 32)
+    );
+    assert_eq!(
+        Constant::new(0x80000000, 32)
+            .ashr(&Constant::new(0x10, 32))
+            .unwrap(),
+        Constant::new(0xffff8000, 32)
     );
 }
 

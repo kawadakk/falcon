@@ -1,9 +1,8 @@
-use architecture::*;
-use goblin;
-use loader::*;
-use memory::backing::Memory;
-use memory::MemoryPermissions;
-use std::collections::BTreeSet;
+use crate::architecture::*;
+use crate::loader::*;
+use crate::memory::backing::Memory;
+use crate::memory::MemoryPermissions;
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
@@ -24,7 +23,7 @@ impl Elf {
         let architecture = {
             let elf = goblin::elf::Elf::parse(&bytes).map_err(|_| "Not a valid elf")?;
 
-            let architecture = if elf.header.e_machine == goblin::elf::header::EM_386 {
+            if elf.header.e_machine == goblin::elf::header::EM_386 {
                 Box::new(X86::new())
             } else if elf.header.e_machine == goblin::elf::header::EM_MIPS {
                 match elf.header.endianness()? {
@@ -51,16 +50,14 @@ impl Elf {
                 }
             } else {
                 bail!("Unsupported Architecture");
-            };
-
-            architecture
+            }
         };
 
         Ok(Elf {
-            base_address: base_address,
-            bytes: bytes,
+            base_address,
+            bytes,
             user_function_entries: Vec::new(),
-            architecture: architecture,
+            architecture,
         })
     }
 
@@ -75,15 +72,11 @@ impl Elf {
         filename: P,
         base_address: u64,
     ) -> Result<Elf> {
-        let mut file = match File::open(&filename) {
+        let filename: &Path = filename.as_ref();
+        let mut file = match File::open(filename) {
             Ok(file) => file,
             Err(e) => {
-                return Err(format!(
-                    "Error opening {}: {}",
-                    (filename.as_ref() as &Path).to_str().unwrap(),
-                    e
-                )
-                .into())
+                return Err(format!("Error opening {:?}: {}", filename.to_string_lossy(), e).into())
             }
         };
         let mut buf = Vec::new();
@@ -110,9 +103,9 @@ impl Elf {
             // We need that strtab, and we have to do this one manually.
             // Get the strtab address
             let mut strtab_address = None;
-            for dyn in &dynamic.dyns {
-                if dyn.d_tag == goblin::elf::dynamic::DT_STRTAB {
-                    strtab_address = Some(dyn.d_val);
+            for dyn_ in &dynamic.dyns {
+                if dyn_.d_tag == goblin::elf::dynamic::DT_STRTAB {
+                    strtab_address = Some(dyn_.d_val);
                     break;
                 }
             }
@@ -134,9 +127,9 @@ impl Elf {
                     let size = size as usize;
                     let strtab_bytes = self.bytes.get(start..(start + size)).unwrap();
                     let strtab = goblin::strtab::Strtab::new(&strtab_bytes, 0);
-                    for dyn in dynamic.dyns {
-                        if dyn.d_tag == goblin::elf::dynamic::DT_NEEDED {
-                            let so_name = &strtab[dyn.d_val as usize];
+                    for dyn_ in dynamic.dyns {
+                        if dyn_.d_tag == goblin::elf::dynamic::DT_NEEDED {
+                            let so_name = &strtab[dyn_.d_val as usize];
                             v.push(so_name.to_string());
                         }
                     }
@@ -251,19 +244,16 @@ impl Loader for Elf {
     fn function_entries(&self) -> Result<Vec<FunctionEntry>> {
         let elf = self.elf();
 
-        let mut function_entries = Vec::new();
-
-        let mut functions_added: BTreeSet<u64> = BTreeSet::new();
+        let mut function_entries: BTreeMap<u64, FunctionEntry> = BTreeMap::new();
 
         // dynamic symbols
         for sym in &elf.dynsyms {
             if sym.is_function() && sym.st_value != 0 && sym.st_shndx > 0 {
                 let name = &elf.dynstrtab[sym.st_name];
-                function_entries.push(FunctionEntry::new(
-                    sym.st_value + self.base_address,
-                    Some(name.to_string()),
-                ));
-                functions_added.insert(sym.st_value);
+                function_entries.insert(
+                    sym.st_value,
+                    FunctionEntry::new(sym.st_value + self.base_address, Some(name.to_string())),
+                );
             }
         }
 
@@ -271,36 +261,35 @@ impl Loader for Elf {
         for sym in &elf.syms {
             if sym.is_function() && sym.st_value != 0 && sym.st_shndx > 0 {
                 let name = &elf.strtab[sym.st_name];
-                function_entries.push(FunctionEntry::new(
-                    sym.st_value + self.base_address,
-                    Some(name.to_string()),
-                ));
-                functions_added.insert(sym.st_value);
+                function_entries.insert(
+                    sym.st_value,
+                    FunctionEntry::new(sym.st_value + self.base_address, Some(name.to_string())),
+                );
             }
         }
 
-        if !functions_added.contains(&elf.header.e_entry) {
-            function_entries.push(FunctionEntry::new(
-                elf.header.e_entry + self.base_address,
-                None,
-            ));
-        }
+        function_entries
+            .entry(elf.header.e_entry)
+            .or_insert_with(|| FunctionEntry::new(elf.header.e_entry + self.base_address, None));
 
-        for user_function_entry in &self.user_function_entries {
-            if functions_added
-                .get(&(user_function_entry + self.base_address))
-                .is_some()
-            {
+        for &user_function_entry in &self.user_function_entries {
+            if function_entries.contains_key(&user_function_entry) {
                 continue;
             }
 
-            function_entries.push(FunctionEntry::new(
-                user_function_entry + self.base_address,
-                Some(format!("user_function_{:x}", user_function_entry)),
-            ));
+            function_entries.insert(
+                user_function_entry,
+                FunctionEntry::new(
+                    user_function_entry + self.base_address,
+                    Some(format!("user_function_{:x}", user_function_entry)),
+                ),
+            );
         }
 
-        Ok(function_entries)
+        Ok(function_entries
+            .into_iter()
+            .map(|(_, entry)| entry)
+            .collect())
     }
 
     fn program_entry(&self) -> u64 {

@@ -18,11 +18,12 @@
 //! # }
 //! ```
 
-use architecture::Architecture;
-use error::*;
-use executor::eval;
-use il;
-use memory;
+use crate::architecture::Architecture;
+use crate::error::*;
+use crate::executor::eval;
+use crate::il;
+use crate::memory;
+use crate::translator::Options;
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -49,10 +50,7 @@ impl FunctionEntry {
     ///
     /// If no name is provided: `sup_{:X}` will be used to name the function.
     pub fn new(address: u64, name: Option<String>) -> FunctionEntry {
-        FunctionEntry {
-            address: address,
-            name: name,
-        }
+        FunctionEntry { address, name }
     }
 
     /// Get the address for this `FunctionEntry`.
@@ -62,7 +60,7 @@ impl FunctionEntry {
 
     /// Get the name for this `FunctionEntry`.
     pub fn name(&self) -> Option<&str> {
-        self.name.as_ref().map(|s| s.as_str())
+        self.name.as_deref()
     }
 }
 
@@ -91,9 +89,15 @@ pub trait Loader: fmt::Debug + Send + Sync {
 
     /// Lift just one function from the executable
     fn function(&self, address: u64) -> Result<il::Function> {
+        self.function_extended(address, &Options::default())
+    }
+
+    /// Lift just one function from the executable, while also supplying
+    /// translator options.
+    fn function_extended(&self, address: u64, options: &Options) -> Result<il::Function> {
         let translator = self.architecture().translator();
         let memory = self.memory()?;
-        Ok(translator.translate_function(&memory, address)?)
+        translator.translate_function_extended(&memory, address, options)
     }
 
     /// Cast loader to `Any`
@@ -114,7 +118,7 @@ pub trait Loader: fmt::Debug + Send + Sync {
     ///
     /// Individual functions which fail to lift are omitted and ignored.
     fn program(&self) -> Result<il::Program> {
-        Ok(self.program_verbose()?.0)
+        Ok(self.program_verbose(&Options::default())?.0)
     }
 
     /// Lift executable into an `il::Program`.
@@ -124,6 +128,7 @@ pub trait Loader: fmt::Debug + Send + Sync {
     /// catastrophic errors should cause this function call to fail.
     fn program_verbose(
         &self,
+        options: &Options,
     ) -> std::result::Result<(il::Program, Vec<(FunctionEntry, Error)>), Error> {
         // Get out architecture-specific translator
         let translator = self.architecture().translator();
@@ -142,7 +147,7 @@ pub trait Loader: fmt::Debug + Send + Sync {
                 .permissions(address)
                 .map_or(false, |p| p.contains(memory::MemoryPermissions::EXECUTE))
             {
-                match translator.translate_function(&memory, address) {
+                match translator.translate_function_extended(&memory, address, options) {
                     Ok(mut function) => {
                         function.set_name(function_entry.name().map(|n| n.to_string()));
                         program.add_function(function);
@@ -161,7 +166,7 @@ pub trait Loader: fmt::Debug + Send + Sync {
     /// program_recursive silently drops any functions that cause lifting
     /// errors. If you care about those, use `program_recursive_verbose`.
     fn program_recursive(&self) -> Result<il::Program> {
-        Ok(self.program_recursive_verbose()?.0)
+        Ok(self.program_recursive_verbose(&Options::default())?.0)
     }
 
     /// Lift executable into an `il::Program`, while recursively resolving branch
@@ -170,29 +175,27 @@ pub trait Loader: fmt::Debug + Send + Sync {
     /// Works in a similar manner to `program_recursive`
     fn program_recursive_verbose(
         &self,
+        options: &Options,
     ) -> std::result::Result<(il::Program, Vec<(FunctionEntry, Error)>), Error> {
-        fn call_targets(function: &il::Function) -> Result<Vec<u64>> {
+        fn call_targets(function: &il::Function) -> Vec<u64> {
             let call_targets =
                 function
                     .blocks()
                     .iter()
                     .fold(Vec::new(), |mut call_targets, block| {
                         block.instructions().iter().for_each(|instruction| {
-                            match *instruction.operation() {
-                                il::Operation::Branch { ref target } => {
-                                    eval(target).ok().map(|constant| {
-                                        call_targets.push(constant.value_u64().unwrap())
-                                    });
+                            if let il::Operation::Branch { ref target } = *instruction.operation() {
+                                if let Ok(constant) = eval(target) {
+                                    call_targets.push(constant.value_u64().unwrap())
                                 }
-                                _ => {}
                             }
                         });
                         call_targets
                     });
-            Ok(call_targets)
+            call_targets
         }
 
-        let (mut program, mut translation_errors) = self.program_verbose()?;
+        let (mut program, mut translation_errors) = self.program_verbose(options)?;
         let mut processed = HashSet::new();
 
         loop {
@@ -223,12 +226,9 @@ pub trait Loader: fmt::Debug + Send + Sync {
                 let addresses = functions
                     .into_iter()
                     .fold(HashSet::new(), |mut targets, function| {
-                        call_targets(function)
-                            .unwrap()
-                            .into_iter()
-                            .for_each(|target| {
-                                targets.insert(target);
-                            });
+                        call_targets(function).into_iter().for_each(|target| {
+                            targets.insert(target);
+                        });
                         targets
                     })
                     .into_iter()
@@ -244,7 +244,7 @@ pub trait Loader: fmt::Debug + Send + Sync {
 
             // For each address, attempt to lift a function
             for address in addresses {
-                match self.function(address) {
+                match self.function_extended(address, options) {
                     Ok(function) => program.add_function(function),
                     Err(e) => {
                         let function_entry = FunctionEntry::new(address, None);

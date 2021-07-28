@@ -3,15 +3,15 @@
 //!
 //! This memory model operates over types which implement the `Value` trait.
 
-use architecture::Endian;
-use error::*;
-use il;
+use crate::architecture::Endian;
+use crate::error::*;
+use crate::il;
+use crate::RC;
 use std::collections::HashMap;
-use RC;
 
-use memory::backing;
-use memory::value::Value;
-use memory::MemoryPermissions;
+use crate::memory::backing;
+use crate::memory::value::Value;
+use crate::memory::MemoryPermissions;
 
 /// The size of the copy-on-write pages.
 pub const PAGE_SIZE: usize = 1024;
@@ -67,7 +67,7 @@ where
     }
 
     fn load(&self, offset: usize) -> Option<&MemoryCell<V>> {
-        self.cells[offset].as_ref().clone()
+        self.cells[offset].as_ref()
     }
 
     pub fn permissions(&self) -> Option<&MemoryPermissions> {
@@ -119,7 +119,7 @@ where
     pub fn new(endian: Endian) -> Memory<V> {
         Memory {
             backing: None,
-            endian: endian,
+            endian,
             pages: HashMap::new(),
         }
     }
@@ -137,7 +137,7 @@ where
     pub fn new_with_backing(endian: Endian, backing: RC<backing::Memory>) -> Memory<V> {
         Memory {
             backing: Some(backing),
-            endian: endian,
+            endian,
             pages: HashMap::new(),
         }
     }
@@ -162,9 +162,9 @@ where
             RC::make_mut(
                 self.pages
                     .entry(page_address)
-                    .or_insert(RC::new(Page::new(PAGE_SIZE))),
+                    .or_insert_with(|| RC::new(Page::new(PAGE_SIZE))),
             )
-            .set_permissions(Some(permissions.clone()));
+            .set_permissions(Some(permissions));
             page_address += PAGE_SIZE as u64;
         }
     }
@@ -264,22 +264,20 @@ where
         // our write, truncating it to the appropriate size, and rewriting it
         let address_after_write = address + (value.bits() / 8) as u64;
 
-        let value_to_write = if let Some(cell) = self.load_cell(address_after_write) {
-            if let MemoryCell::Backref(backref_address) = *cell {
-                let backref_value = self
-                    .load_cell(backref_address)
-                    .ok_or("Backref cell pointed to null cell")?
-                    .value()
-                    .ok_or("Backref cell pointed to cell without value")?;
-                // furthest most address backref value reaches
-                let backref_furthest_address = backref_address + (backref_value.bits() / 8) as u64;
-                // how many bits are left after our write
-                let left_bits = ((backref_furthest_address - address_after_write) * 8) as usize;
-                // load that value
-                self.load(address_after_write, left_bits)?
-            } else {
-                None
-            }
+        let value_to_write = if let Some(MemoryCell::Backref(backref_address)) =
+            self.load_cell(address_after_write)
+        {
+            let backref_value = self
+                .load_cell(*backref_address)
+                .ok_or("Backref cell pointed to null cell")?
+                .value()
+                .ok_or("Backref cell pointed to cell without value")?;
+            // furthest most address backref value reaches
+            let backref_furthest_address = backref_address + (backref_value.bits() / 8) as u64;
+            // how many bits are left after our write
+            let left_bits = ((backref_furthest_address - address_after_write) * 8) as usize;
+            // load that value
+            self.load(address_after_write, left_bits)?
         } else {
             None
         };
@@ -289,22 +287,19 @@ where
         }
 
         // handle values we overwrite before this write
-        let value_to_write = if let Some(cell) = self.load_cell(address) {
-            if let MemoryCell::Backref(backref_address) = *cell {
-                let backref_value = self.load_cell(backref_address).unwrap().value().unwrap();
+        let value_to_write =
+            if let Some(MemoryCell::Backref(backref_address)) = self.load_cell(address) {
+                let backref_value = self.load_cell(*backref_address).unwrap().value().unwrap();
                 // furthest most address backref value reaches
                 let backref_furthest_address = backref_address + (backref_value.bits() / 8) as u64;
                 // how many bits are we about to overwrite
                 let overwrite_bits = (backref_furthest_address - address) * 8;
                 // how many bits are left over
                 let left_bits = backref_value.bits() - overwrite_bits as usize;
-                Some((backref_address, self.load(backref_address, left_bits)?))
+                Some((*backref_address, self.load(*backref_address, left_bits)?))
             } else {
                 None
-            }
-        } else {
-            None
-        };
+            };
 
         if let Some(value_to_write) = value_to_write {
             self.store_no_backref(value_to_write.0, value_to_write.1.unwrap());
@@ -470,12 +465,12 @@ where
 
 #[cfg(test)]
 mod memory_tests {
-    use architecture::Endian;
-    use il;
-    use memory;
-    use memory::paged::Memory;
-    use memory::MemoryPermissions;
-    use RC;
+    use crate::architecture::Endian;
+    use crate::il;
+    use crate::memory;
+    use crate::memory::paged::Memory;
+    use crate::memory::MemoryPermissions;
+    use crate::RC;
 
     #[test]
     fn big_endian() {
