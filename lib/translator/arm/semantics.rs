@@ -326,7 +326,7 @@ pub fn ldr_all(
     let block_index = {
         let block = control_flow_graph.new_block()?;
 
-        let temp = block.temp(bits);
+        let temp = temp(instruction, bits);
         block.load(temp.clone(), address);
         let src: Expression = if bits == dst.bits() {
             temp.into()
@@ -374,4 +374,8 @@ pub fn ldr_multi(
     } else {
         unreachable!()
     }
+}
+
+fn temp(instruction: &capstone::Instr, bits: usize) -> Scalar {
+    Scalar::temp(instruction.address, bits)
 }

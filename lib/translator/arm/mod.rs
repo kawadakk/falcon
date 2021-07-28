@@ -3,7 +3,7 @@
 use crate::architecture::Endian;
 use crate::error::*;
 use crate::il::*;
-use crate::translator::{BlockTranslationResult, Translator};
+use crate::translator::{unhandled_intrinsic, BlockTranslationResult, Options, Translator};
 use falcon_capstone::capstone;
 use falcon_capstone::capstone_sys::arm_cc;
 
@@ -22,8 +22,13 @@ impl Arm {
 }
 
 impl Translator for Arm {
-    fn translate_block(&self, bytes: &[u8], address: u64) -> Result<BlockTranslationResult> {
-        translate_block(bytes, address, Endian::Big)
+    fn translate_block(
+        &self,
+        bytes: &[u8],
+        address: u64,
+        options: &Options,
+    ) -> Result<BlockTranslationResult> {
+        translate_block(bytes, address, options, Endian::Big)
     }
 }
 
@@ -38,8 +43,13 @@ impl Armel {
 }
 
 impl Translator for Armel {
-    fn translate_block(&self, bytes: &[u8], address: u64) -> Result<BlockTranslationResult> {
-        translate_block(bytes, address, Endian::Little)
+    fn translate_block(
+        &self,
+        bytes: &[u8],
+        address: u64,
+        options: &Options,
+    ) -> Result<BlockTranslationResult> {
+        translate_block(bytes, address, options, Endian::Little)
     }
 }
 
@@ -149,7 +159,12 @@ fn make_instruction_conditional(
     Ok(())
 }
 
-fn translate_block(bytes: &[u8], address: u64, endian: Endian) -> Result<BlockTranslationResult> {
+fn translate_block(
+    bytes: &[u8],
+    address: u64,
+    options: &Options,
+    endian: Endian,
+) -> Result<BlockTranslationResult> {
     let mode = if endian == Endian::Big {
         capstone::CS_MODE_ARM | capstone::CS_MODE_BIG_ENDIAN
     } else {
@@ -224,16 +239,20 @@ fn translate_block(bytes: &[u8], address: u64, endian: Endian) -> Result<BlockTr
                     semantics::orr(&mut instruction_graph, &instruction)
                 }
                 _ => {
-                    let bytes = (0..4)
-                        .map(|i| disassembly_bytes[i])
-                        .map(|byte| format!("{:02x}", byte))
-                        .collect::<Vec<String>>()
-                        .join("");
-                    return Err(format!(
-                        "Unhandled instruction {} {} {} at 0x{:x}",
-                        bytes, instruction.mnemonic, instruction.op_str, instruction.address
-                    )
-                    .into());
+                    if options.unsupported_are_intrinsics() {
+                        unhandled_intrinsic(&mut instruction_graph, &instruction)
+                    } else {
+                        let bytes = (0..4)
+                            .map(|i| disassembly_bytes[i])
+                            .map(|byte| format!("{:02x}", byte))
+                            .collect::<Vec<String>>()
+                            .join("");
+                        return Err(format!(
+                            "Unhandled instruction {} {} {} at 0x{:x}",
+                            bytes, instruction.mnemonic, instruction.op_str, instruction.address
+                        )
+                        .into());
+                    }
                 }
             }?;
 
