@@ -151,14 +151,13 @@ impl<'a> RegisterMaker<'a> {
             arm_shifter::ARM_SFT_LSL => Expression::shl(expr, shift_amount()),
             arm_shifter::ARM_SFT_LSR => Expression::shr(expr, shift_amount()),
             arm_shifter::ARM_SFT_ROR => Expression::rotr(expr, shift_amount()),
-            arm_shifter::ARM_SFT_RRX =>
-                Expression::or(
-                    Expression::shl(
-                        Expression::zext(32, expr_scalar("C", 1))?,
-                        expr_const(31, 32)
-                    )?,
-                    Expression::shr(expr, expr_const(31, 32))?
-                ),
+            arm_shifter::ARM_SFT_RRX => Expression::or(
+                Expression::shl(
+                    Expression::zext(32, expr_scalar("C", 1))?,
+                    expr_const(31, 32),
+                )?,
+                Expression::shr(expr, expr_const(31, 32))?,
+            ),
             _ => unimplemented!(),
         }
     }
