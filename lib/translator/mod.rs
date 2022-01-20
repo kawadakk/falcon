@@ -22,15 +22,19 @@ use crate::memory::MemoryPermissions;
 
 pub mod aarch64;
 mod block_translation_result;
+#[cfg(feature = "falcon_capstone")]
 pub mod mips;
 mod options;
+#[cfg(feature = "falcon_capstone")]
 pub mod ppc;
+#[cfg(feature = "falcon_capstone")]
 pub mod x86;
 
 use crate::error::*;
 use crate::il;
 use crate::il::*;
 pub use block_translation_result::BlockTranslationResult;
+#[cfg(feature = "falcon_capstone")]
 use falcon_capstone::capstone;
 pub use options::{ManualEdge, Options, OptionsBuilder};
 use std::collections::{BTreeMap, VecDeque};
@@ -66,6 +70,7 @@ pub trait TranslationMemory {
 }
 
 // A convenience function for turning unhandled instructions into intrinsics
+#[cfg(feature = "falcon_capstone")]
 pub(crate) fn unhandled_intrinsic(
     control_flow_graph: &mut il::ControlFlowGraph,
     instruction: &capstone::Instr,

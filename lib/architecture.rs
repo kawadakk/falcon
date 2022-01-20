@@ -48,8 +48,13 @@ impl Architecture for Amd64 {
     fn endian(&self) -> Endian {
         Endian::Little
     }
+    #[cfg(feature = "falcon_capstone")]
     fn translator(&self) -> Box<dyn translator::Translator> {
         Box::new(translator::x86::Amd64::new())
+    }
+    #[cfg(not(feature = "falcon_capstone"))]
+    fn translator(&self) -> Box<dyn translator::Translator> {
+        unimplemented!("capstone support is disabled")
     }
     fn calling_convention(&self) -> CallingConvention {
         CallingConvention::new(CallingConventionType::Amd64SystemV)
@@ -150,8 +155,13 @@ impl Architecture for Mips {
     fn endian(&self) -> Endian {
         Endian::Big
     }
+    #[cfg(feature = "falcon_capstone")]
     fn translator(&self) -> Box<dyn translator::Translator> {
         Box::new(translator::mips::Mips::new())
+    }
+    #[cfg(not(feature = "falcon_capstone"))]
+    fn translator(&self) -> Box<dyn translator::Translator> {
+        unimplemented!("capstone support is disabled")
     }
     fn calling_convention(&self) -> CallingConvention {
         CallingConvention::new(CallingConventionType::MipsSystemV)
@@ -184,8 +194,13 @@ impl Architecture for Mipsel {
     fn endian(&self) -> Endian {
         Endian::Big
     }
+    #[cfg(feature = "falcon_capstone")]
     fn translator(&self) -> Box<dyn translator::Translator> {
         Box::new(translator::mips::Mipsel::new())
+    }
+    #[cfg(not(feature = "falcon_capstone"))]
+    fn translator(&self) -> Box<dyn translator::Translator> {
+        unimplemented!("capstone support is disabled")
     }
     fn calling_convention(&self) -> CallingConvention {
         CallingConvention::new(CallingConventionType::MipsSystemV)
@@ -218,8 +233,13 @@ impl Architecture for Ppc {
     fn endian(&self) -> Endian {
         Endian::Big
     }
+    #[cfg(feature = "falcon_capstone")]
     fn translator(&self) -> Box<dyn translator::Translator> {
         Box::new(translator::ppc::Ppc::new())
+    }
+    #[cfg(not(feature = "falcon_capstone"))]
+    fn translator(&self) -> Box<dyn translator::Translator> {
+        unimplemented!("capstone support is disabled")
     }
     fn calling_convention(&self) -> CallingConvention {
         CallingConvention::new(CallingConventionType::PpcSystemV)
@@ -252,8 +272,13 @@ impl Architecture for X86 {
     fn endian(&self) -> Endian {
         Endian::Little
     }
+    #[cfg(feature = "falcon_capstone")]
     fn translator(&self) -> Box<dyn translator::Translator> {
         Box::new(translator::x86::X86::new())
+    }
+    #[cfg(not(feature = "falcon_capstone"))]
+    fn translator(&self) -> Box<dyn translator::Translator> {
+        unimplemented!("capstone support is disabled")
     }
     fn calling_convention(&self) -> CallingConvention {
         CallingConvention::new(CallingConventionType::Cdecl)

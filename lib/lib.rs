@@ -65,6 +65,23 @@ pub type RC<T> = Arc<T>;
 
 /// Falcon Error types.
 pub mod error {
+    #[cfg(feature = "falcon_capstone")]
+    type CsErr = ::falcon_capstone::capstone::CsErr;
+
+    /// A substitute for `falcon_capstone::capstone::CsErr` which is disabled
+    /// by Cargo features.
+    #[cfg(not(feature = "falcon_capstone"))]
+    #[derive(Debug)]
+    pub enum CsErr {}
+
+    impl std::fmt::Display for CsErr {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            match *self {}
+        }
+    }
+
+    impl std::error::Error for CsErr {}
+
     error_chain! {
         types {
             Error, ErrorKind, ResultExt, Result;
@@ -73,7 +90,7 @@ pub mod error {
         foreign_links {
             Bad64(::bad64::DecodeError);
             Base64(::base64::DecodeError);
-            Capstone(::falcon_capstone::capstone::CsErr);
+            Capstone(CsErr);
             Goblin(::goblin::error::Error);
             Io(::std::io::Error);
             Json(::serde_json::Error);
